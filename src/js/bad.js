@@ -32,14 +32,17 @@ var clickBtn = () => {
             start: new Date()
         };
         // Envoi des informations
-        localStorage.setItem("dataGame", JSON.stringify(obj));
+        sessionStorage.setItem("dataGame", JSON.stringify(obj));
         // Changement de page
         window.location.href = '/badminton';
     }
 };
+/** JEU */
 let game;
+/** HISTORIQUE DES SETS */
+let logsSets = [];
 let startGame = () => {
-    let dataGame = localStorage.getItem("dataGame");
+    let dataGame = sessionStorage.getItem("dataGame");
     if (dataGame === null)
         window.location.href = '/';
     let obj = JSON.parse(dataGame);
@@ -78,6 +81,7 @@ var formatTime = (secondes) => {
 class Badminton {
     constructor(gameInfos) {
         this.gameInfos = gameInfos;
+        this.gameInfos.sets = Number(this.gameInfos.sets);
         this.player1 = new BadmintonPlayer(gameInfos.player1, gameInfos.sets, gameInfos.points);
         this.player2 = new BadmintonPlayer(gameInfos.palyer2, gameInfos.sets, gameInfos.points);
         this.service = null;
@@ -112,14 +116,14 @@ class Badminton {
             this.toggleService();
             yield sleep(2000);
             // Temporisation pour le début de la partie
-            yield this.break(5); // TODO : Remettre à 25
+            yield this.break(30);
             this.playSong();
             // Debut du jeu avec entrainement
             yield this.train();
             this.setInfoTxt("Début du jeu");
             // On démarre le jeu avec un nouveau set
             this.inGame = true;
-            this.newSet();
+            this.newSet(true);
             this.startTimer();
         });
     }
@@ -137,7 +141,8 @@ class Badminton {
             let inT = setInterval(() => {
                 // @ts-ignore
                 time--;
-                this.setInfoTxt("Pause de " + time + " secondes");
+                // @ts-ignore
+                this.setInfoTxt("Pause de " + time + " seconde" + (time > 1 ? "s" : ""));
             }, 1000);
             yield sleep(time * 1000);
             clearInterval(inT);
@@ -151,12 +156,12 @@ class Badminton {
     train() {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
-            let time = 10; // TODO : Remettre à 100
+            let time = 100;
             this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
             let inT = setInterval(() => {
                 // @ts-ignore
                 time--;
-                this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
+                this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " seconde" + (time > 1 ? "s" : ""));
             }, 1000);
             yield sleep(time * 1000);
             this.playSong();
@@ -213,36 +218,107 @@ class Badminton {
      * @private
      */
     newSet() {
-        this.timeSets = 0;
-        this.toggleTimerSet();
-        let htmlPla1 = `
-        <div class="set set-p1">
-
-            <p>${this.player1.getSet()}</p>
-
-        </div>
-
-        <div class="game gam-p1">
-
-            <p>0</p>
-
-        </div>
-        `;
-        let htmlPla2 = `
-        <div class="set set-p2">
-
-            <p>${this.player2.getSet()}</p>
-
-        </div>
-
-        <div class="game gam-p2">
-
-            <p>0</p>
-
-        </div>`;
-        $("#ligne-j1").append(htmlPla1);
-        $("#ligne-j2").append(htmlPla2);
-        this.toggleTimerPoint();
+        return __awaiter(this, arguments, void 0, function* (init = false) {
+            // Initialiser un nouveau set lors d'un nouveau jeu
+            if (init) {
+                this.timeSets = 0;
+                this.toggleTimerSet();
+                let htmlPla1 = `
+            <div class="set set-p1">
+    
+                <p>${this.player1.getSet()}</p>
+    
+            </div>
+    
+            <div class="game gam-p1">
+    
+                <p>0</p>
+    
+            </div>
+            `;
+                let htmlPla2 = `
+            <div class="set set-p2">
+    
+                <p>${this.player2.getSet()}</p>
+    
+            </div>
+    
+            <div class="game gam-p2">
+    
+                <p>0</p>
+    
+            </div>`;
+                $("#ligne-j1").append(htmlPla1);
+                $("#ligne-j2").append(htmlPla2);
+                this.toggleTimerPoint();
+                this.inGame = true;
+                return;
+            }
+            let p1 = this.player1.getSet();
+            let p2 = this.player2.getSet();
+            if ((p1 >= 6 && Math.abs(p1 - p2) >= 2) || (p2 >= 6 && Math.abs(p2 - p1) >= 2)) {
+                this.inGame = false;
+                this.toggleTimerSet();
+                this.toggleTimerPoint();
+                let win = p1 > p2 ? 1 : 2;
+                let lose = win === 1 ? 2 : 1;
+                let winPlayer = (win === 1 ? this.player1 : this.player2);
+                let losePlayer = (win === 1 ? this.player2 : this.player1);
+                $(".set-p" + win + " p").text(winPlayer.getSet());
+                $(".set-p" + lose + " p").text(losePlayer.getSet());
+                winPlayer.addScore();
+                if (winPlayer.getScore() === this.gameInfos.sets) {
+                    this.setInfoTxt("Le joueur " + winPlayer.getNomJoueur() + " a gagné le match !");
+                    $(".gam-p2").remove();
+                    $(".gam-p1").remove();
+                    $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
+                    $(".set-p" + lose).removeClass("set-p" + lose).addClass("s-lose");
+                    yield sleep(2000);
+                    this.gameEnd = true;
+                    this.inGame = false;
+                    return;
+                }
+                else {
+                    this.setInfoTxt("Le joueur " + winPlayer.getNomJoueur() + " a gagné le jeu !");
+                    $(".gam-p2").remove();
+                    $(".gam-p1").remove();
+                    $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
+                    $(".set-p" + lose).removeClass("set-p" + lose).addClass("s-lose");
+                    yield sleep(2000);
+                    this.player1.resetSets();
+                    this.player2.resetSets();
+                    this.player1.resetPoint();
+                    this.player2.resetPoint();
+                    yield this.break(120);
+                    this.playSong();
+                    this.setInfoTxt("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
+                    yield sleep(2000);
+                    yield this.train();
+                    this.newSet(true);
+                }
+            }
+            else {
+                this.toggleTimerSet();
+                this.toggleTimerPoint();
+                $(".set-p1 p").text(p1);
+                $(".set-p2 p").text(p2);
+                this.player1.resetPoint();
+                this.player2.resetPoint();
+                $(".gam-p1 p").text("0");
+                $(".gam-p2 p").text("0");
+                yield this.break(120);
+                this.playSong();
+                this.setInfoTxt("Début du set " + (p1 + p2 + 1));
+                yield sleep(2000);
+                this.timeSets = 0;
+                this.timePoints = 0;
+                yield this.train();
+                this.setInfoTxt("Début");
+                this.toggleTimerSet();
+                this.toggleTimerPoint();
+                this.inGame = true;
+            }
+        });
     }
     /**
      * Lorsque le joueur marque un nouveau point
@@ -254,10 +330,22 @@ class Badminton {
                 return;
             let playerN = (player === 1 ? this.player1 : this.player2);
             let otherPlayer = (player === 1 ? this.player2 : this.player1);
+            console.log("Nouveau point pour " + playerN.getNomJoueur());
+            console.log("Score : " + playerN.getPoint());
+            console.log("Score : " + otherPlayer.getPoint());
             if (playerN.getPoint() + 1 >= this.gameInfos.points && Math.abs(playerN.getPoint() + 1 - otherPlayer.getPoint()) >= 2) {
                 this.setInfoTxt("Fin du set pour " + playerN.getNomJoueur());
+                let logedSet = {
+                    j1: this.player1.getPoint(),
+                    j2: this.player2.getPoint(),
+                    time: this.timeSets
+                };
+                logsSets.push(logedSet);
+                playerN.addSet();
+                this.newSet();
             }
             else {
+                this.inGame = false;
                 playerN.addPoint();
                 let scoreP1 = this.player1.getPoint();
                 let scoreP2 = this.player2.getPoint();
@@ -265,11 +353,21 @@ class Badminton {
                 $(".gam-p2 p").text(scoreP2);
                 this.toggleService();
                 yield sleep(2000);
-                if (playerN.getPoint() == this.gameInfos.points - 1) {
-                    this.setInfoTxt("Balle de set pour " + playerN.getNomJoueur());
+                let txtBalle = "set";
+                if (this.balleDeJeu(playerN, otherPlayer))
+                    txtBalle = "jeu";
+                if (this.balleDeMatch(playerN, otherPlayer))
+                    txtBalle = "match";
+                if (playerN.getPoint() == this.gameInfos.points - 1 && Math.abs(playerN.getPoint() - otherPlayer.getPoint()) > 1) {
+                    this.setInfoTxt("Balle de " + txtBalle + " pour " + playerN.getNomJoueur());
+                    this.importantPoint();
+                }
+                else if (playerN.getPoint() >= this.gameInfos.points - 1 && Math.abs(playerN.getPoint() - otherPlayer.getPoint()) == 1) {
+                    this.setInfoTxt("Balle de " + txtBalle + " pour " + playerN.getNomJoueur());
                     this.importantPoint();
                 }
                 this.timePoints = 0;
+                this.inGame = true;
             }
         });
     }
@@ -323,6 +421,31 @@ class Badminton {
         let audio = new Audio('other/horn.mp3');
         audio.play();
     }
+    /**
+     * Retourne si il s'agit d'une balle de jeu
+     * @return {boolean}
+     * @private
+     */
+    balleDeJeu(playPoint, otherPlay) {
+        let p1 = playPoint.getSet();
+        let p2 = otherPlay.getSet();
+        return p1 + 1 >= 6 && p1 - p2 >= 1;
+    }
+    /**
+     * Retourne si il s'agit d'une balle de match
+     * @return {boolean}
+     * @private
+     */
+    balleDeMatch(playPoint, otherPlay) {
+        let p1 = playPoint.getScore();
+        console.log(p1);
+        console.log(this.gameInfos.sets);
+        console.log(typeof p1);
+        console.log(typeof this.gameInfos.sets);
+        console.log(this.balleDeJeu(playPoint, otherPlay));
+        console.log(p1 + 1 === this.gameInfos.sets);
+        return this.balleDeJeu(playPoint, otherPlay) && p1 + 1 === this.gameInfos.sets;
+    }
 }
 /**
  * Classe permettant de gérer les joueurs du jeu de badminton
@@ -341,13 +464,47 @@ class BadmintonPlayer {
         this.maxSet = sets;
         this.maxPoints = points;
     }
+    /**
+     * Ajouter un point au joueur
+     */
     addPoint() {
         this.points++;
+    }
+    /**
+     * Ajouter un set au joueur
+     */
+    addSet() {
+        this.points = 0;
+        this.sets++;
+    }
+    /**
+     * Ajouter un jeu au joueur
+     */
+    addScore() {
+        this.score++;
+        this.points = 0;
+        this.sets = 0;
     }
     /** Récupérer le nombre de points pour le jeu en cours */
     getPoint() { return this.points; }
     /** Récupérer le nombre de sets pour le jeu en cours */
     getSet() { return this.sets; }
+    /** Récupérer le nombre de jeux pour le jeu en cours */
+    getScore() { return this.score; }
+    /**
+     * Permet de forcer le nombre de set (Pour les tests)
+     * @param {number} set
+     */
+    setSets(set) {
+        this.sets = set;
+    }
+    /**
+     * Permet de forcer le nombre de points (Pour les tests)
+     * @param {number} point
+     */
+    setPoints(point) {
+        this.points = point;
+    }
     /**
      * Permet de récupérer le nom du joueur
      * @return {string} Nom du joueur
@@ -363,6 +520,14 @@ class BadmintonPlayer {
      */
     toogleServe() {
         this.serve = !this.serve;
+    }
+    /** Permet de réinitialiser les points du joueur */
+    resetPoint() {
+        this.points = 0;
+    }
+    /** Permet de réinitialiser les sets du joueur */
+    resetSets() {
+        this.sets = 0;
     }
 }
 /********* EVENTS *********/
