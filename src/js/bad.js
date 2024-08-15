@@ -121,6 +121,7 @@ class Badminton {
             // Debut du jeu avec entrainement
             yield this.train();
             this.setInfoTxt("Début du jeu");
+            this.talk("Début du jeu");
             // On démarre le jeu avec un nouveau set
             this.inGame = true;
             this.newSet(true);
@@ -145,6 +146,7 @@ class Badminton {
                 this.setInfoTxt("Pause de " + time + " seconde" + (time > 1 ? "s" : ""));
             }, 1000);
             yield sleep(time * 1000);
+            this.talk("Fin de la pause");
             clearInterval(inT);
         });
     }
@@ -156,7 +158,8 @@ class Badminton {
     train() {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
-            let time = 100;
+            this.talk("Échauffement de 40 secondes");
+            let time = 40;
             this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
             let inT = setInterval(() => {
                 // @ts-ignore
@@ -269,6 +272,7 @@ class Badminton {
                 winPlayer.addScore();
                 if (winPlayer.getScore() === this.gameInfos.sets) {
                     this.setInfoTxt("Le joueur " + winPlayer.getNomJoueur() + " a gagné le match !");
+                    this.talk("Le joueur " + winPlayer.getNomJoueur() + " a gagné le match !");
                     $(".gam-p2").remove();
                     $(".gam-p1").remove();
                     $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
@@ -280,6 +284,7 @@ class Badminton {
                 }
                 else {
                     this.setInfoTxt("Le joueur " + winPlayer.getNomJoueur() + " a gagné le jeu !");
+                    this.talk("Le joueur " + winPlayer.getNomJoueur() + " a gagné le jeu !");
                     $(".gam-p2").remove();
                     $(".gam-p1").remove();
                     $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
@@ -289,9 +294,10 @@ class Badminton {
                     this.player2.resetSets();
                     this.player1.resetPoint();
                     this.player2.resetPoint();
-                    yield this.break(120);
+                    yield this.break(45);
                     this.playSong();
                     this.setInfoTxt("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
+                    this.talk("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
                     yield sleep(2000);
                     yield this.train();
                     this.newSet(true);
@@ -306,9 +312,10 @@ class Badminton {
                 this.player2.resetPoint();
                 $(".gam-p1 p").text("0");
                 $(".gam-p2 p").text("0");
-                yield this.break(120);
+                yield this.break(45);
                 this.playSong();
                 this.setInfoTxt("Début du set " + (p1 + p2 + 1));
+                this.talk("Début du set " + (p1 + p2 + 1));
                 yield sleep(2000);
                 this.timeSets = 0;
                 this.timePoints = 0;
@@ -335,6 +342,7 @@ class Badminton {
             console.log("Score : " + otherPlayer.getPoint());
             if (playerN.getPoint() + 1 >= this.gameInfos.points && Math.abs(playerN.getPoint() + 1 - otherPlayer.getPoint()) >= 2) {
                 this.setInfoTxt("Fin du set pour " + playerN.getNomJoueur());
+                this.talk("Fin du set pour " + playerN.getNomJoueur());
                 let logedSet = {
                     j1: this.player1.getPoint(),
                     j2: this.player2.getPoint(),
@@ -342,11 +350,16 @@ class Badminton {
                 };
                 logsSets.push(logedSet);
                 playerN.addSet();
+                let playerLead = (playerN.getPoint() > otherPlayer.getPoint() ? playerN : otherPlayer);
+                let playerLose = (playerN.getPoint() > otherPlayer.getPoint() ? otherPlayer : playerN);
+                this.talk(playerLead.getNomJoueur() + " mène " + playerLead.getPoint() + " sets à " + playerLose.getPoint());
                 this.newSet();
             }
             else {
                 this.inGame = false;
                 playerN.addPoint();
+                this.talk("Score : " + playerN.getPoint() + " à " + otherPlayer.getPoint());
+                this.talk("Nouveau point pour " + playerN.getNomJoueur());
                 let scoreP1 = this.player1.getPoint();
                 let scoreP2 = this.player2.getPoint();
                 $(".gam-p1 p").text(scoreP1);
@@ -361,15 +374,39 @@ class Badminton {
                 if (playerN.getPoint() == this.gameInfos.points - 1 && Math.abs(playerN.getPoint() - otherPlayer.getPoint()) > 1) {
                     this.setInfoTxt("Balle de " + txtBalle + " pour " + playerN.getNomJoueur());
                     this.importantPoint();
+                    this.talk("Balle de " + txtBalle + " pour " + playerN.getNomJoueur());
                 }
                 else if (playerN.getPoint() >= this.gameInfos.points - 1 && Math.abs(playerN.getPoint() - otherPlayer.getPoint()) == 1) {
                     this.setInfoTxt("Balle de " + txtBalle + " pour " + playerN.getNomJoueur());
                     this.importantPoint();
+                    this.talk("Balle de " + txtBalle + " pour " + playerN.getNomJoueur());
                 }
                 this.timePoints = 0;
                 this.inGame = true;
             }
         });
+    }
+    /**
+     * Enoncer le texte
+     * @param {string} text
+     * @private
+     */
+    talk(text) {
+        // Check if the browser supports the Web Speech API
+        if ('speechSynthesis' in window) {
+            // Create a new instance of SpeechSynthesisUtterance
+            console.log("parlE");
+            const msg = new SpeechSynthesisUtterance();
+            // Set the text you want to convert to speech
+            msg.text = text;
+            // Set the language (optional)
+            msg.lang = 'fr-FR';
+            // Speak the text
+            window.speechSynthesis.speak(msg);
+        }
+        else {
+            alert('NON DISPO');
+        }
     }
     /**
      * Modifier le texte d'information
@@ -398,9 +435,11 @@ class Badminton {
         $("img.serve-l").remove();
         if (this.player1.getServe()) {
             $("#joueur1").append('<img class="serve-l" src="icon/vol.svg" alt="Service" />');
+            this.talk("Service de " + this.player1.getNomJoueur());
         }
         else {
             $("#joueur2").append('<img class="serve-l" src="icon/vol.svg" alt="Service" />');
+            this.talk("Service de " + this.player2.getNomJoueur());
         }
         this.setInfoTxt(this.service.getNomJoueur() + " sert");
     }
