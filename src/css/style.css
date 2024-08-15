@@ -1,0 +1,165 @@
+/*
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+*
+{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Outfit', sans-serif;
+}
+body
+{
+    width: 100vw;
+    height: 100vh;
+    background: #280900;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.heading-time
+{
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    margin: 15px 0;
+    width: 80vw;
+}
+.heading-time .row
+{
+    display: flex;
+    align-items: center;
+    color: white;
+    justify-content: space-between;
+    width: 100%;
+    margin: 2px 0;
+    font-size: 12px;
+}
+.heading-time .row .time
+{
+    font-weight: 600;
+}
+body .score
+{
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    width: 80vw;
+}
+.score .ligne-score
+{
+    display: flex;
+    align-items: center;
+}
+.score .ligne-score .first
+{
+    background: #053C2C;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    width: 40vw;
+    height: 15vh;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+}
+.score .ligne-score .first img
+{
+    height: 5vh;
+    margin: 0 10px;
+}
+.score .ligne-score .set
+{
+    background: #468B6A;
+    color: white;
+    padding: 10px;
+    font-size: 25px;
+    width: 6vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    height: 15vh;
+}
+.score .ligne-score .game
+{
+    background: white;
+    color: #468B6A;
+    padding: 10px;
+    font-size: 25px;
+    width: 6vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    height: 15vh;
+}
+.score .ligne-score .s-win
+{
+    color: white;
+    background: #053C2C;
+}
+.score .ligne-score .s-lose
+{
+    color: #588D7E;
+    background: #053C2C;
+}
+.infos
+{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    margin: 30px 0;
+    color: white;
+}
+.row-infos
+{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin: 15px 0;
+    width: 80vw;
+}
+.row-infos label
+{
+    color: white;
+    font-size: 30px;
+    font-weight: 700;
+}
+.row-infos input
+{
+    background: #468B6A;
+    font-size: 20px;
+    border: none;
+    border-radius: 10px;
+    margin: 0 15px;
+    padding: 13px;
+    color: white
+}
+.row-infos input::placeholder
+{
+    color: #2D6C4E;
+}
+button.go
+{
+    margin: 50px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 8px solid #06805C;
+    color :white;
+    font-size: 30px;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 20px 40px;
+    cursor: pointer;
+    background: #053C2C;
+}

@@ -1,0 +1,60 @@
+<!--
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+-->
+
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Score Smash | Début</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/bad.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+
+    <div class="row-infos">
+
+        <label for="player1">Joueur 1</label>
+
+        <input type="text" name="player1" id="player1" placeholder="Tapez le nom du joueur 1">
+        
+    </div>
+
+    <div class="row-infos">
+
+        <label for="player2">Joueur 2</label>
+
+        <input type="text" name="player2" id="player2" placeholder="Tapez le nom du joueur 2">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="nbSets"># de sets gagnant :</label>
+
+        <input type="number" step="1" min="1" max="10" name="nbSets" id="nbSets" placeholder="Nombre de sets gagnant" value="2">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="nbPoints"># de points par set</label>
+
+        <input type="number" step="1" min="1" max="50" name="nbPoints" id="nbPoints" placeholder="Nombre de points pour remporter le set" value="20">
+
+    </div>
+
+    <button onclick="clickBtn()" class="go">
+
+        GO
+
+    </button>
+
+</body>
+</html>

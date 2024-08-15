@@ -1,0 +1,124 @@
+<!--
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+-->
+
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Score Smash</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="/js/bad.js"></script>
+</head>
+<body>
+
+    <div class="heading-time">
+
+        <div class="row">
+
+            <p class="info">Jeu</p>
+
+            <p class="time" id="totalTime">00:00:00</p>
+
+        </div>
+
+        <div class="row">
+
+            <p class="info">Set</p>
+
+            <p class="time" id="setsTime">00:00:00</p>
+
+        </div>
+
+        <div class="row">
+
+            <p class="info">Point</p>
+
+            <p class="time" id="pointTime">00:00:00</p>
+
+        </div>
+
+    </div>
+
+    <div class="score">
+
+        <div class="ligne-score" id="ligne-j1">
+
+            <div onclick="clickScore(1)" class="first" id="joueur1">
+                
+                <p>Joueur 1</p>
+
+            </div>
+
+            <!--<div class="set s-win">
+
+                <p>6</p>
+
+            </div>
+
+            <div class="set">
+
+                <p>4</p>
+
+            </div>
+
+            <div class="game">
+
+                <p>14</p>
+
+            </div>-->
+
+        </div>
+
+        <div class="ligne-score" id="ligne-j2">
+
+            <div onclick="clickScore(2)" class="first" id="joueur2">
+
+                <p>Joueur 2</p>
+
+            </div>
+
+            <!--<div class="set s-lose">
+
+                <p>2</p>
+
+            </div>
+
+            <div class="set">
+
+                <p>4</p>
+
+            </div>
+
+            <div class="game">
+
+                <p>14</p>
+
+            </div>-->
+
+        </div>
+
+    </div>
+
+    <div class="infos" id="info_txt">
+
+    </div>
+
+<script>
+
+    $(() => {
+
+        startGame();
+
+    })
+
+</script>
+
+</body>
+</html>
