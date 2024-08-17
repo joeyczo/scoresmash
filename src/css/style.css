@@ -25,7 +25,7 @@ body
 {
     display: flex;
     align-items: center;
-    flex-direction: column;
+    justify-content: space-between;
     margin: 15px 0;
     width: 80vw;
 }
@@ -36,7 +36,7 @@ body
     color: white;
     justify-content: space-between;
     width: 100%;
-    margin: 2px 0;
+    margin: 0 10px;
     font-size: 12px;
 }
 .heading-time .row .time
@@ -118,7 +118,7 @@ body .score
     justify-content: center;
     font-weight: 700;
     font-size: 18px;
-    margin: 30px 0;
+    margin: 20px 0;
     color: white;
 }
 .row-infos
@@ -162,4 +162,40 @@ button.go
     padding: 20px 40px;
     cursor: pointer;
     background: #053C2C;
+}
+.grid-all-points
+{
+    display: flex;
+    align-items: end;
+    width: 80vw;
+    margin: 10px 0;
+    color: white;
+    overflow: auto;
+}
+.grid-all-points .item
+{
+    display: flex;
+    flex-direction: column;
+}
+.grid-all-points .item .winner
+{
+    background: #468B6A;
+    font-size: 16px;
+    font-weight: 600;
+    height: 11vh;
+    width: 11vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.grid-all-points .item .looser
+{
+    background: rgba(70, 139, 106, 0.4);
+    font-size: 16px;
+    font-weight: 600;
+    height: 11vh;
+    width: 11vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

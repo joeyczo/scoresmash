@@ -24,6 +24,13 @@ interface dataLogSet {
     time : number
 }
 
+/** Informations envoyés lors de la fin d'un point */
+interface dataLogPoint {
+    j1   : number,
+    j2   : number;
+    time : number
+}
+
 /********* METHODES *********/
 
 /**
@@ -60,6 +67,8 @@ var clickBtn = () : void => {
 let game : Badminton;
 /** HISTORIQUE DES SETS */
 let logsSets : dataLogSet[] = [];
+/** HISTORIQUE DES POINTS */
+let logsPoints : dataLogPoint[] = [];
 
 let startGame = () => {
 
@@ -201,6 +210,7 @@ class Badminton {
 
         this.setInfoTxt("Début du jeu");
         this.talk("Début du jeu");
+        this.talk(this.service.getNomJoueur() + " commence à servir");
 
         // On démarre le jeu avec un nouveau set
         this.inGame = true;
@@ -208,6 +218,8 @@ class Badminton {
         this.newSet(true);
 
         this.startTimer();
+
+
 
     }
 
@@ -252,7 +264,7 @@ class Badminton {
 
         this.talk("Échauffement de 40 secondes")
 
-        let time : number = 40;
+        let time : number = 40; // TODO : Mettre à 40
 
         this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
 
@@ -480,7 +492,7 @@ class Badminton {
             $(".gam-p1 p").text("0");
             $(".gam-p2 p").text("0");
 
-            await this.break(45);
+            await this.break(45); // TODO : Mettre à 45
 
             this.playSong();
 
@@ -537,10 +549,12 @@ class Badminton {
 
             playerN.addSet();
 
-            let playerLead : BadmintonPlayer = (playerN.getPoint() > otherPlayer.getPoint() ? playerN : otherPlayer);
-            let playerLose : BadmintonPlayer = (playerN.getPoint() > otherPlayer.getPoint() ? otherPlayer : playerN);
+            $(".grid-all-points").html('');
 
-            this.talk(playerLead.getNomJoueur() + " mène " + playerLead.getPoint() + " sets à " + playerLose.getPoint());
+            let playerLead : BadmintonPlayer = (playerN.getSet() > otherPlayer.getSet() ? playerN : otherPlayer);
+            let playerLose : BadmintonPlayer = (playerN.getSet() > otherPlayer.getSet() ? otherPlayer : playerN);
+
+            this.talk(playerLead.getNomJoueur() + " mène " + playerLead.getSet() + " sets à " + playerLose.getSet());
 
             this.newSet();
 
@@ -550,7 +564,29 @@ class Badminton {
             playerN.addPoint();
 
             this.talk("Nouveau point pour " + playerN.getNomJoueur());
-            this.talk("Score : " + playerN.getPoint() + " à " + otherPlayer.getPoint());
+            this.talk(playerN.getPoint() + " à " + otherPlayer.getPoint() + " pour " + playerN.getNomJoueur());
+
+            let txtPoint : string;
+
+            if (player === 1) {
+                txtPoint = `<div class="item">
+
+                    <div class="winner">${playerN.getPoint()}</div>
+                    <div class="looser"></div>
+        
+                </div>`
+            } else {
+                txtPoint = `<div class="item">
+
+                    <div class="looser"></div>
+                    <div class="winner">${playerN.getPoint()}</div>
+        
+                </div>`
+            }
+
+            $(".grid-all-points").append(txtPoint);
+
+            $('.grid-all-points').scrollLeft($('.grid-all-points')[0].scrollWidth);
 
             let scoreP1 = this.player1.getPoint();
             let scoreP2 = this.player2.getPoint();
@@ -650,10 +686,10 @@ class Badminton {
 
         if (this.player1.getServe()) {
             $("#joueur1").append('<img class="serve-l" src="icon/vol.svg" alt="Service" />');
-            this.talk("Service de " + this.player1.getNomJoueur());
+            this.talk(this.player1.getNomJoueur() + " sert");
         } else {
             $("#joueur2").append('<img class="serve-l" src="icon/vol.svg" alt="Service" />');
-            this.talk("Service de " + this.player2.getNomJoueur());
+            this.talk(this.player2.getNomJoueur() + " sert");
         }
 
         this.setInfoTxt( this.service.getNomJoueur() + " sert" );

@@ -41,6 +41,8 @@ var clickBtn = () => {
 let game;
 /** HISTORIQUE DES SETS */
 let logsSets = [];
+/** HISTORIQUE DES POINTS */
+let logsPoints = [];
 let startGame = () => {
     let dataGame = sessionStorage.getItem("dataGame");
     if (dataGame === null)
@@ -116,12 +118,13 @@ class Badminton {
             this.toggleService();
             yield sleep(2000);
             // Temporisation pour le début de la partie
-            yield this.break(30);
+            yield this.break(2); // TODO : Mettre à 30
             this.playSong();
             // Debut du jeu avec entrainement
             yield this.train();
             this.setInfoTxt("Début du jeu");
             this.talk("Début du jeu");
+            this.talk(this.service.getNomJoueur() + " commence à servir");
             // On démarre le jeu avec un nouveau set
             this.inGame = true;
             this.newSet(true);
@@ -159,7 +162,7 @@ class Badminton {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
             this.talk("Échauffement de 40 secondes");
-            let time = 40;
+            let time = 5; // TODO : Mettre à 40
             this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
             let inT = setInterval(() => {
                 // @ts-ignore
@@ -168,6 +171,7 @@ class Badminton {
             }, 1000);
             yield sleep(time * 1000);
             this.playSong();
+            this.talk("Début du point");
             clearInterval(inT);
         });
     }
@@ -312,7 +316,7 @@ class Badminton {
                 this.player2.resetPoint();
                 $(".gam-p1 p").text("0");
                 $(".gam-p2 p").text("0");
-                yield this.break(45);
+                yield this.break(5); // TODO : Mettre à 45
                 this.playSong();
                 this.setInfoTxt("Début du set " + (p1 + p2 + 1));
                 this.talk("Début du set " + (p1 + p2 + 1));
@@ -350,16 +354,36 @@ class Badminton {
                 };
                 logsSets.push(logedSet);
                 playerN.addSet();
-                let playerLead = (playerN.getPoint() > otherPlayer.getPoint() ? playerN : otherPlayer);
-                let playerLose = (playerN.getPoint() > otherPlayer.getPoint() ? otherPlayer : playerN);
-                this.talk(playerLead.getNomJoueur() + " mène " + playerLead.getPoint() + " sets à " + playerLose.getPoint());
+                $(".grid-all-points").html('');
+                let playerLead = (playerN.getSet() > otherPlayer.getSet() ? playerN : otherPlayer);
+                let playerLose = (playerN.getSet() > otherPlayer.getSet() ? otherPlayer : playerN);
+                this.talk(playerLead.getNomJoueur() + " mène " + playerLead.getSet() + " sets à " + playerLose.getSet());
                 this.newSet();
             }
             else {
                 this.inGame = false;
                 playerN.addPoint();
-                this.talk("Score : " + playerN.getPoint() + " à " + otherPlayer.getPoint());
                 this.talk("Nouveau point pour " + playerN.getNomJoueur());
+                this.talk(playerN.getPoint() + " à " + otherPlayer.getPoint() + " pour " + playerN.getNomJoueur());
+                let txtPoint;
+                if (player === 1) {
+                    txtPoint = `<div class="item">
+
+                    <div class="winner">${playerN.getPoint()}</div>
+                    <div class="looser"></div>
+        
+                </div>`;
+                }
+                else {
+                    txtPoint = `<div class="item">
+
+                    <div class="looser"></div>
+                    <div class="winner">${playerN.getPoint()}</div>
+        
+                </div>`;
+                }
+                $(".grid-all-points").append(txtPoint);
+                $('.grid-all-points').scrollLeft($('.grid-all-points')[0].scrollWidth);
                 let scoreP1 = this.player1.getPoint();
                 let scoreP2 = this.player2.getPoint();
                 $(".gam-p1 p").text(scoreP1);
@@ -435,11 +459,11 @@ class Badminton {
         $("img.serve-l").remove();
         if (this.player1.getServe()) {
             $("#joueur1").append('<img class="serve-l" src="icon/vol.svg" alt="Service" />');
-            this.talk("Service de " + this.player1.getNomJoueur());
+            this.talk(this.player1.getNomJoueur() + " sert");
         }
         else {
             $("#joueur2").append('<img class="serve-l" src="icon/vol.svg" alt="Service" />');
-            this.talk("Service de " + this.player2.getNomJoueur());
+            this.talk(this.player2.getNomJoueur() + " sert");
         }
         this.setInfoTxt(this.service.getNomJoueur() + " sert");
     }
