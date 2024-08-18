@@ -24,7 +24,8 @@
     "express": "^4.19.2",
     "html-pdf-node": "^1.0.8",
     "serve-favicon": "^2.5.0",
-    "talkify-tts": "^4.0.0"
+    "talkify-tts": "^4.0.0",
+    "typescript": "^5.5.4"
   },
   "devDependencies": {
     "@types/jquery": "^3.5.30",
