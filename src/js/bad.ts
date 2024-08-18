@@ -8,6 +8,8 @@
 
 /********* INTERFACES *********/
 
+let dev : boolean = false; // TODO : Changer
+
 /** Informations envoyés lors du démarrage de la partie */
 interface dataSendInfoStart {
     player1     : string,
@@ -131,6 +133,11 @@ class Badminton {
     private player2     : BadmintonPlayer;
     /** Joueur qui sert */
     private service     : BadmintonPlayer | null;
+    /** Dernier joueur à avoir marqué un point */
+    private lastPlayerWon : BadmintonPlayer | null;
+    /** Série de point gagné par le joueur */
+    private numberPoint   : number;
+
     /** Temps de début de la partie */
     private timeStart   : number;
     /** Durée du set */
@@ -158,6 +165,8 @@ class Badminton {
         this.player1 = new BadmintonPlayer( gameInfos.player1, gameInfos.sets, gameInfos.points );
         this.player2 = new BadmintonPlayer( gameInfos.palyer2, gameInfos.sets, gameInfos.points );
         this.service = null;
+        this.lastPlayerWon = null;
+        this.numberPoint = 0;
 
         this.timeStart = 0;
         this.timeSets = 0;
@@ -200,7 +209,7 @@ class Badminton {
         await sleep(2000);
 
         // Temporisation pour le début de la partie
-        await this.break(30);
+        await this.break(!dev ? 30 : 2);
 
         this.playSong();
 
@@ -264,7 +273,7 @@ class Badminton {
 
         this.talk("Échauffement de 40 secondes")
 
-        let time : number = 40; // TODO : Mettre à 40
+        let time : number = !dev ? 40 : 2;
 
         this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
 
@@ -492,7 +501,7 @@ class Badminton {
             $(".gam-p1 p").text("0");
             $(".gam-p2 p").text("0");
 
-            await this.break(45); // TODO : Mettre à 45
+            await this.break(!dev ? 45 : 2);
 
             this.playSong();
 
@@ -507,6 +516,7 @@ class Badminton {
             await this.train();
 
             this.setInfoTxt("Début");
+            if (this.service !== null) this.talk(this.service.getNomJoueur() + " sert");
 
             this.toggleTimerSet();
             this.toggleTimerPoint();
@@ -529,10 +539,6 @@ class Badminton {
 
         let playerN     : BadmintonPlayer = (player === 1 ? this.player1 : this.player2);
         let otherPlayer : BadmintonPlayer = (player === 1 ? this.player2 : this.player1);
-
-        console.log("Nouveau point pour " + playerN.getNomJoueur());
-        console.log("Score : " + playerN.getPoint());
-        console.log("Score : " + otherPlayer.getPoint());
 
         if (playerN.getPoint() + 1 >= this.gameInfos.points && Math.abs(playerN.getPoint() + 1 - otherPlayer.getPoint()) >= 2) {
 
@@ -563,7 +569,7 @@ class Badminton {
 
             playerN.addPoint();
 
-            this.talk("Nouveau point pour " + playerN.getNomJoueur());
+            this.talk("Point pour " + playerN.getNomJoueur());
             this.talk(playerN.getPoint() + " à " + otherPlayer.getPoint() + " pour " + playerN.getNomJoueur());
 
             let txtPoint : string;
@@ -584,6 +590,22 @@ class Badminton {
                 </div>`
             }
 
+            if (this.lastPlayerWon !== null && this.lastPlayerWon === playerN) {
+
+                this.numberPoint++;
+
+                if (this.numberPoint >= 4) {
+                    this.talk(this.numberPoint + 1 + " points consécutifs pour " + playerN.getNomJoueur());
+                }
+
+                this.talk(this.service?.getNomJoueur() + " sert");
+
+            } else {
+                this.numberPoint = 0;
+                this.lastPlayerWon = playerN;
+                this.toggleService();
+            }
+
             $(".grid-all-points").append(txtPoint);
 
             $('.grid-all-points').scrollLeft($('.grid-all-points')[0].scrollWidth);
@@ -593,8 +615,6 @@ class Badminton {
 
             $(".gam-p1 p").text(scoreP1);
             $(".gam-p2 p").text(scoreP2);
-
-            this.toggleService();
 
             await sleep(2000);
 
@@ -635,8 +655,6 @@ class Badminton {
         if ('speechSynthesis' in window) {
             // Create a new instance of SpeechSynthesisUtterance
 
-            console.log("parlE")
-
             const msg = new SpeechSynthesisUtterance();
 
             // Set the text you want to convert to speech
@@ -644,6 +662,9 @@ class Badminton {
 
             // Set the language (optional)
             msg.lang = 'fr-FR';
+
+            // Vitesse
+            msg.rate = 1.65;
 
             // Speak the text
             window.speechSynthesis.speak(msg);

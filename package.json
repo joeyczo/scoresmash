@@ -27,6 +27,7 @@
     "talkify-tts": "^4.0.0"
   },
   "devDependencies": {
-    "@types/jquery": "^3.5.30"
+    "@types/jquery": "^3.5.30",
+    "cross-env": "^7.0.3"
   }
 }
