@@ -22,6 +22,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(__dirname));
 app.use(express.static(path.join(__dirname, 'icon')));
 app.use(express.static(path.join(__dirname, 'js')))
+app.use(express.static(path.join(__dirname, 'css')))
 app.use(favicon(path.join(__dirname, 'icon', 'favicon.ico')));
 
 app.set('view engine', 'ejs');
