@@ -1,0 +1,48 @@
+<!--
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+-->
+
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Score Smash | Remote</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="../js/remote.js"></script>
+</head>
+<body>
+
+<div class="row-infos">
+
+    <label for="access">Code d'accès</label>
+
+    <input type="text" name="access" id="access" placeholder="Tapez le code d'accès">
+
+</div>
+
+<div class="row-infos">
+
+    <label for="player">Joueur</label>
+
+    <select name="player" id="player">
+        <option value="1">Joueur 1</option>
+        <option value="2">Joueur 2</option>
+    </select>
+
+</div>
+
+<button onclick="joinSession()" class="go">
+
+    Rejoindre
+
+</button>
+
+</body>
+</html>

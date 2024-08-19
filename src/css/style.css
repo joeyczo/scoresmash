@@ -134,7 +134,7 @@ body .score
     font-size: 30px;
     font-weight: 700;
 }
-.row-infos input
+.row-infos input, .row-infos select
 {
     background: #468B6A;
     font-size: 20px;
@@ -162,6 +162,10 @@ button.go
     padding: 20px 40px;
     cursor: pointer;
     background: #053C2C;
+}
+button.go:disabled
+{
+    opacity: 0.4;
 }
 .grid-all-points
 {

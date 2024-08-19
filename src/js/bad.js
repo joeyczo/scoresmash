@@ -15,7 +15,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 /********* DÉPENDANCES *********/
 /********* INTERFACES *********/
-let dev = false; // TODO : Changer
+// @ts-ignore
+var dev = false; // TODO : Changer
 /********* METHODES *********/
 /**
  * Début du jeu lors du click sur le bouton
@@ -46,17 +47,31 @@ let game;
 let logsSets = [];
 /** HISTORIQUE DES POINTS */
 let logsPoints = [];
-let startGame = () => {
+// @ts-ignore
+const socket = io();
+let startGame = (socketR) => {
     let dataGame = sessionStorage.getItem("dataGame");
     if (dataGame === null)
         window.location.href = '/';
     let obj = JSON.parse(dataGame);
     game = new Badminton(obj);
 };
+var randomUID = (taille = 20) => {
+    var uid = '';
+    var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (var i = 0; i < taille; i++) {
+        uid += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return uid;
+};
 let clickScore = (player) => {
     if (game === undefined)
         return;
     game.newPoint(player);
+};
+let startMatch = () => {
+    game.start();
+    $("button.go").hide();
 };
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -99,8 +114,11 @@ class Badminton {
         this.inGame = false;
         this.chronoSet = null;
         this.chronoPoint = null;
-        // On démarre le jeu
-        this.start();
+        this.roomId = !dev ? randomUID(5) : "dev";
+        socket.emit('createRoom', { roomId: this.roomId });
+        socket.emit('testSocketRoom', { roomId: this.roomId });
+        this.setInfoTxt("Code d'accès : " + this.roomId);
+        this.initSocket();
     }
     /**
      * Démarrer le jeu
@@ -432,6 +450,8 @@ class Badminton {
      * @private
      */
     talk(text) {
+        if (dev)
+            return;
         // Check if the browser supports the Web Speech API
         if ('speechSynthesis' in window) {
             // Create a new instance of SpeechSynthesisUtterance
@@ -525,6 +545,26 @@ class Badminton {
         console.log(this.balleDeJeu(playPoint, otherPlay));
         console.log(p1 + 1 === this.gameInfos.sets);
         return this.balleDeJeu(playPoint, otherPlay) && p1 + 1 === this.gameInfos.sets;
+    }
+    /**
+     * Faire fonctionner les sockets
+     * @private
+     */
+    initSocket() {
+        console.log(this.roomId);
+        socket.on('confirmRoom', () => {
+            $("button.go").show();
+        });
+        socket.on('fetchPlayerName', () => {
+            let dataPlayer = {
+                player1: this.player1.getNomJoueur(),
+                player2: this.player2.getNomJoueur()
+            };
+            socket.emit('sendPlayersName', { roomId: this.roomId }, dataPlayer);
+        });
+        socket.on('addPoint', (player) => {
+            this.newPoint(player);
+        });
     }
 }
 /**

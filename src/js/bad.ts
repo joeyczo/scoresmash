@@ -8,7 +8,8 @@
 
 /********* INTERFACES *********/
 
-let dev : boolean = false; // TODO : Changer
+// @ts-ignore
+var dev : boolean = false; // TODO : Changer
 
 /** Informations envoyés lors du démarrage de la partie */
 interface dataSendInfoStart {
@@ -72,7 +73,10 @@ let logsSets : dataLogSet[] = [];
 /** HISTORIQUE DES POINTS */
 let logsPoints : dataLogPoint[] = [];
 
-let startGame = () => {
+// @ts-ignore
+const socket = io();
+
+let startGame = (socketR : any) => {
 
     let dataGame = sessionStorage.getItem("dataGame") as string;
 
@@ -84,12 +88,26 @@ let startGame = () => {
 
 }
 
+var randomUID = (taille = 20) => {
+    var uid = '';
+    var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (var i = 0; i < taille; i++) {
+        uid += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return uid;
+}
+
 let clickScore = ( player : number ) : void => {
 
     if (game === undefined) return;
 
     game.newPoint( player );
 
+}
+
+let startMatch = () => {
+    game.start();
+    $("button.go").hide();
 }
 
 function sleep(ms : number) : Promise<void> {
@@ -154,9 +172,11 @@ class Badminton {
     private chronoSet   : any;
     /** Interval du chrono de point */
     private chronoPoint : any;
+    /** ID de la room du socket */
+    private roomId : string;
 
 
-    constructor ( gameInfos : dataSendInfoStart ) {
+    constructor ( gameInfos : dataSendInfoStart) {
 
         this.gameInfos = gameInfos;
 
@@ -177,9 +197,15 @@ class Badminton {
 
         this.chronoSet = null;
         this.chronoPoint = null;
+        this.roomId = !dev ? randomUID(5) : "dev";
 
-        // On démarre le jeu
-        this.start();
+        socket.emit('createRoom', {roomId : this.roomId});
+
+        socket.emit('testSocketRoom', {roomId : this.roomId});
+
+        this.setInfoTxt("Code d'accès : " + this.roomId);
+
+        this.initSocket();
 
     }
 
@@ -187,7 +213,7 @@ class Badminton {
      * Démarrer le jeu
      * @private
      */
-    private async start() : Promise<void> {
+    public async start() : Promise<void> {
 
         console.log("Démarrage du jeu");
 
@@ -651,6 +677,8 @@ class Badminton {
      */
     private talk ( text : string ) : void {
 
+        if (dev) return;
+
         // Check if the browser supports the Web Speech API
         if ('speechSynthesis' in window) {
             // Create a new instance of SpeechSynthesisUtterance
@@ -664,7 +692,7 @@ class Badminton {
             msg.lang = 'fr-FR';
 
             // Vitesse
-            msg.rate = 1.65;
+            msg.rate = 1.75;
 
             // Speak the text
             window.speechSynthesis.speak(msg);
@@ -777,6 +805,35 @@ class Badminton {
         console.log(p1+1 === this.gameInfos.sets as number)
 
         return this.balleDeJeu(playPoint, otherPlay) && p1+1 === this.gameInfos.sets as number;
+
+    }
+
+    /**
+     * Faire fonctionner les sockets
+     * @private
+     */
+    private initSocket() : void {
+
+        console.log(this.roomId);
+
+        socket.on('confirmRoom', () => {
+            $("button.go").show();
+        });
+
+        socket.on('fetchPlayerName', () => {
+            let dataPlayer = {
+                player1 : this.player1.getNomJoueur(),
+                player2 : this.player2.getNomJoueur()
+            }
+
+            socket.emit('sendPlayersName', {roomId : this.roomId}, dataPlayer);
+        });
+
+        socket.on('addPoint', (player : number) => {
+
+            this.newPoint(player);
+
+        })
 
     }
 

@@ -1,0 +1,42 @@
+<!--
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+-->
+
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Score Smash | Remote Badminton</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="../js/remote.js"></script>
+    <script>
+
+        initRemoteBad();
+
+    </script>
+</head>
+<body>
+
+<div class="heading-time">
+
+    <div class="row">
+
+        <p class="info">Joueur</p>
+
+        <p class="time" id="player_name"></p>
+
+    </div>
+
+</div>
+
+<button class="go point-btn">POINT</button>
+
+</body>
+</html>
