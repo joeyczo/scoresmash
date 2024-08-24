@@ -6,8 +6,6 @@
 
 /********* DÉPENDANCES *********/
 
-/*import { PDFBad } from '../pdf/pdfBad.js'*/
-
 /********* INTERFACES *********/
 
 // @ts-ignore
@@ -25,7 +23,7 @@ interface dataSendInfoStart {
 
 /** Informations du match pour créer le PDF */
 interface dataLogMatch {
-    winner      : number,
+    winner      : string,
     time        : number,
     numberSet   : number,
     gamesList   : dataLogJeu[]
@@ -227,7 +225,7 @@ class Badminton {
         this.logsGames = [];
         this.logsSets  = [];
         this.logMatch = {
-            winner      : 0,
+            winner      : "",
             time        : 0,
             numberSet   : 0,
             gamesList   : []
@@ -252,25 +250,8 @@ class Badminton {
 
         console.log("Démarrage du jeu");
 
-        // Affichage des informations
-        $("#joueur1 p").text( this.player1.getNomJoueur() );
-        $("#joueur2 p").text( this.player2.getNomJoueur() );
-
-        // Choix du joueur qui sert en premier
-        let rand = Math.floor(Math.random() * 2);
-        if (rand === 0) this.service = this.player2;
-        else            this.service = this.player1;
-
-        this.service.toogleServe();
-
-        await sleep(2000);
-
-        this.toggleService();
-
-        await sleep(2000);
-
         let dataFinMatch : dataLogMatch = {
-            winner      : 1,
+            winner      : "Joey",
             time        : 1541,
             numberSet   : 21,
             gamesList   : [
@@ -302,7 +283,7 @@ class Badminton {
                         {
                             j1   : 7,
                             j2   : 20,
-                            time : 60
+                            time : 245
                         },
                         {
                             j1   : 20,
@@ -312,7 +293,7 @@ class Badminton {
                         {
                             j1   : 21,
                             j2   : 19,
-                            time : 60
+                            time : 197
                         },
                         {
                             j1   : 21,
@@ -322,11 +303,21 @@ class Badminton {
                         {
                             j1   : 10,
                             j2   : 20,
-                            time : 60
+                            time : 128
                         },
                         {
                             j1   : 24,
                             j2   : 26,
+                            time : 60
+                        },
+                        {
+                            j1   : 20,
+                            j2   : 12,
+                            time : 148
+                        },
+                        {
+                            j1   : 26,
+                            j2   : 24,
                             time : 60
                         }
                     ]
@@ -448,7 +439,24 @@ class Badminton {
             ]
         }
 
-        //new PDFBad(dataFinMatch);
+        this.printPDFMatch(dataFinMatch);
+
+        // Affichage des informations
+        $("#joueur1 p").text( this.player1.getNomJoueur() );
+        $("#joueur2 p").text( this.player2.getNomJoueur() );
+
+        // Choix du joueur qui sert en premier
+        let rand = Math.floor(Math.random() * 2);
+        if (rand === 0) this.service = this.player2;
+        else            this.service = this.player1;
+
+        this.service.toogleServe();
+
+        await sleep(2000);
+
+        this.toggleService();
+
+        await sleep(2000);
 
         // Temporisation pour le début de la partie
         await this.break(!dev ? 30 : 2);
@@ -699,7 +707,7 @@ class Badminton {
                 this.logMatch.gamesList = this.logsGames;
                 this.logMatch.numberSet = this.numSets - 1;
                 this.logMatch.time      = this.timeStart;
-                this.logMatch.winner    = win;
+                this.logMatch.winner    = winPlayer.getNomJoueur();
 
 
 
@@ -1103,6 +1111,14 @@ class Badminton {
         if (!this.gameEnd) return null;
 
         return this.logMatch;
+
+    }
+
+    private printPDFMatch (dataToPrint? : dataLogMatch) : void {
+
+        localStorage.setItem("dataMatch", JSON.stringify(dataToPrint === undefined ? this.logMatch : dataToPrint));
+
+        window.open('/pdfBad', '_blank');
 
     }
 

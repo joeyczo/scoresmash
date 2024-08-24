@@ -51,6 +51,10 @@ app.get('/badminton', (req, res) => {
     res.sendFile(path.join(__dirname, 'src/view/badminton.html'));
 })
 
+app.get('/pdfBad', (req, res) => {
+    res.sendFile(path.join(__dirname, 'src/pdf/pdfBad.html'));
+})
+
 io.on('connection', (socket : any) => {
     console.log('a user connected');
 

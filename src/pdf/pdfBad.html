@@ -1,0 +1,278 @@
+<!--
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+-->
+
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Score Smash</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://unpkg.com/jspdf@1.5.3/dist/jspdf.min.js"></script>
+    <script src="pdf/Inter-Regular-normal.js"></script>
+</head>
+<body>
+
+<h1>génération en cours ...</h1>
+
+</body>
+<script>
+
+    var formatTime = (secondes) => {
+        const heures = Math.floor(secondes / 3600);
+        const minutes = Math.floor((secondes % 3600) / 60);
+        const secs = secondes % 60;
+
+        const formattedHours = String(heures).padStart(2, '0');
+        const formattedMinutes = String(minutes).padStart(2, '0');
+        const formattedSeconds = String(secs).padStart(2, '0');
+
+        return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+    }
+
+    let dataMatch = JSON.parse(localStorage.getItem('dataMatch'));
+
+    let doc = new jsPDF({
+        unit : 'px'
+    });
+
+
+    console.log(doc.getFontList())
+    console.log(doc.internal.pageSize.getWidth() + " x " + doc.internal.pageSize.getHeight())
+
+    doc.setFillColor(160, 228, 196);
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+
+    doc.setFontSize(40);
+    doc.setFont('inter', 'bold');
+    doc.setTextColor(5, 60, 44);
+    doc.text('Résumé des scores', 97, 49);
+
+    doc.setFontSize(12);
+    doc.setFontType('medium')
+
+    doc.text("Durée du match :", 16, 100)
+    doc.text("Nombre de sets :", 156, 100)
+    doc.text("Gagnant :", 307, 100);
+
+    doc.setFontType("bold")
+
+    doc.text(formatTime(dataMatch.time) + "", 135, 100, {align: "right"});
+    doc.text(dataMatch.numberSet + "", 280, 100, {align: "right"});
+    doc.text(dataMatch.winner + "", 430, 100, {align: "right"});
+
+    //doc.text(JSON.stringify(dataMatch, null, 4), 20, 60);
+
+    doc.setFillColor(5, 60, 44);
+    doc.roundedRect(68, 130, 311, 4, 5, 5, 'F');
+
+    /**** JEU 1 ****/
+
+    doc.setFillColor(129, 194, 166);
+    doc.roundedRect(12, 161, doc.internal.pageSize.getWidth() - 24, 430, 10, 10, 'F')
+
+    doc.setFontSize(20)
+
+    doc.text("Jeu 1", 20, 185);
+    doc.text(dataMatch.gamesList[0].player1 + " - " + dataMatch.gamesList[0].player2, doc.internal.pageSize.getWidth() - 20, 185, {align: 'right'});
+
+    doc.setTextColor(255,255,255);
+
+    let xStart = 20;
+    let yStart = 200;
+
+    let p1Set = 0;
+    let p2Set = 0;
+
+    doc.setFontSize(12)
+
+    for (let i = 1; i <= dataMatch.gamesList[0].setsList.length && i <= 15; i++) {
+
+        doc.setTextColor(255,255,255);
+
+        let dataSet = dataMatch.gamesList[0].setsList[i - 1];
+
+        doc.setFillColor(79, 140, 117);
+        doc.roundedRect(xStart, yStart, 128, 70, 5, 5, 'F');
+
+        doc.setFontSize(15)
+        doc.setFontType("bold")
+
+        if (dataSet.j1 > dataSet.j2) p1Set++;
+        else                         p2Set++;
+
+        doc.text("Set " + i, xStart + 10, yStart + 15);
+
+        doc.setFontType("medium")
+
+        doc.text(p1Set + "-" + p2Set, xStart - 10 + 128, yStart + 15, {align: 'right'});
+
+        doc.setFillColor(5, 60, 44)
+
+        doc.rect(xStart + 10, yStart + 25, 80, 15, 'F');
+        doc.rect(xStart + 10, yStart + 25 + 15, 80, 15, 'F');
+
+        doc.setFontSize(8)
+
+        doc.setTextColor(255,255,255);
+
+        if (dataSet.j1 < dataSet.j2)
+            doc.setTextColor(105, 138, 128)
+
+        doc.text("Joueur 1", xStart + 13, yStart + 35);
+
+        doc.setTextColor(255,255,255);
+
+        if (dataSet.j2 < dataSet.j1)
+            doc.setTextColor(105, 138, 128)
+
+        doc.text("Joueur 2", xStart + 13, yStart + 35 + 15);
+
+        doc.setFillColor(255, 255, 255)
+        doc.setTextColor(0, 0, 0);
+
+        doc.rect(xStart - 30 + 128, yStart + 25, 20, 15, 'F');
+        doc.rect(xStart - 30 + 128, yStart + 25 + 15, 20, 15, 'F');
+
+        doc.text(dataSet.j1 + "", xStart - 20 + 128, yStart + 35, {align: 'center'});
+        doc.text(dataSet.j2 + "", xStart - 20 + 128, yStart + 35 + 15, {align: 'center'});
+
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(6)
+
+        doc.text(formatTime(dataSet.time) + "", xStart + 10, yStart + 64);
+
+        xStart += 138;
+
+        if (i % 3 === 0 && i !== 0) {
+            xStart = 20;
+            yStart += 77;
+        }
+
+    }
+
+    /**** FOOTER ****/
+
+    doc.setTextColor(0, 29, 20);
+
+    doc.setFontSize(8);
+    doc.text('Session du ' + new Date().toLocaleDateString('fr-FR'), 37, 615);
+    doc.text('Page 1', doc.internal.pageSize.getWidth() - 37, 615, {align: 'right'});
+
+    /**** AUTRE JEUX ****/
+
+    let numPage = 1;
+
+    for (let j = 2; j <= dataMatch.gamesList.length; j++) {
+
+        doc.addPage();
+
+        doc.setFillColor(160, 228, 196);
+        doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+
+        /**** JEU ****/
+
+        doc.setFillColor(129, 194, 166);
+        doc.roundedRect(12, 161, doc.internal.pageSize.getWidth() - 24, 430, 10, 10, 'F')
+
+        doc.setFontSize(20)
+
+        doc.text("Jeu " + j, 20, 185);
+        doc.text(dataMatch.gamesList[j - 1].player1 + " - " + dataMatch.gamesList[j - 1].player2, doc.internal.pageSize.getWidth() - 20, 185, {align: 'right'});
+
+        doc.setTextColor(255,255,255);
+
+        let xStart = 20;
+        let yStart = 200;
+
+        let p1Set = 0;
+        let p2Set = 0;
+
+        for (let i = 1; i <= dataMatch.gamesList[j-1].setsList.length && i <= 15; i++) {
+
+            doc.setTextColor(255,255,255);
+
+            let dataSet = dataMatch.gamesList[j-1].setsList[i - 1];
+
+            doc.setFillColor(79, 140, 117);
+            doc.roundedRect(xStart, yStart, 128, 70, 5, 5, 'F');
+
+            doc.setFontSize(15)
+            doc.setFontType("bold")
+
+            if (dataSet.j1 > dataSet.j2) p1Set++;
+            else                         p2Set++;
+
+            doc.text("Set " + i, xStart + 10, yStart + 15);
+
+            doc.setFontType("medium")
+
+            doc.text(p1Set + "-" + p2Set, xStart - 10 + 128, yStart + 15, {align: 'right'});
+
+            doc.setFillColor(5, 60, 44)
+
+            doc.rect(xStart + 10, yStart + 25, 80, 15, 'F');
+            doc.rect(xStart + 10, yStart + 25 + 15, 80, 15, 'F');
+
+            doc.setFontSize(8)
+
+            doc.setTextColor(255,255,255);
+
+            if (dataSet.j1 < dataSet.j2)
+                doc.setTextColor(105, 138, 128)
+
+            doc.text("Joueur 1", xStart + 13, yStart + 35);
+
+            doc.setTextColor(255,255,255);
+
+            if (dataSet.j2 < dataSet.j1)
+                doc.setTextColor(105, 138, 128)
+
+            doc.text("Joueur 2", xStart + 13, yStart + 35 + 15);
+
+            doc.setFillColor(255, 255, 255)
+            doc.setTextColor(0, 0, 0);
+
+            doc.rect(xStart - 30 + 128, yStart + 25, 20, 15, 'F');
+            doc.rect(xStart - 30 + 128, yStart + 25 + 15, 20, 15, 'F');
+
+            doc.text(dataSet.j1 + "", xStart - 20 + 128, yStart + 35, {align: 'center'});
+            doc.text(dataSet.j2 + "", xStart - 20 + 128, yStart + 35 + 15, {align: 'center'});
+
+            doc.setTextColor(255, 255, 255)
+            doc.setFontSize(6)
+
+            doc.text(formatTime(dataSet.time) + "", xStart + 10, yStart + 64);
+
+            xStart += 138;
+
+            if (i % 3 === 0 && i !== 0) {
+                xStart = 20;
+                yStart += 77;
+            }
+
+        }
+
+        /**** FOOTER ****/
+
+        doc.setTextColor(0, 29, 20);
+
+        doc.setFontSize(8);
+        doc.text('Session du ' + new Date().toLocaleDateString('fr-FR'), 37, 615);
+        doc.text('Page ' + j, doc.internal.pageSize.getWidth() - 37, 615, {align: 'right'});
+
+    }
+    doc.save('scores.pdf');
+
+    window.close();
+
+</script>
+
+</html>
