@@ -6,6 +6,8 @@
 
 /********* DÉPENDANCES *********/
 
+/*import { PDFBad } from '../pdf/pdfBad.js'*/
+
 /********* INTERFACES *********/
 
 // @ts-ignore
@@ -14,10 +16,27 @@ var dev : boolean = false; // TODO : Changer
 /** Informations envoyés lors du démarrage de la partie */
 interface dataSendInfoStart {
     player1     : string,
-    palyer2     : string,
-    sets        : number,
-    points      : number,
+    player2     : string,
+    sets        : number, // Nombre de jeux pour gagner le match
+    set         : number, // Nombre de sets pour gagner le jeu
+    points      : number, // Nombre de points pour gagner le set
     start       : Date
+}
+
+/** Informations du match pour créer le PDF */
+interface dataLogMatch {
+    winner      : number,
+    time        : number,
+    numberSet   : number,
+    gamesList   : dataLogJeu[]
+}
+
+/** Information envoyés à la fin d'un jeu */
+interface dataLogJeu {
+    player1     : number,
+    player2     : number,
+    time        : number,
+    setsList    : dataLogSet[]
 }
 
 /** Informations envoyés lors de la fin d'un set */
@@ -27,12 +46,6 @@ interface dataLogSet {
     time : number
 }
 
-/** Informations envoyés lors de la fin d'un point */
-interface dataLogPoint {
-    j1   : number,
-    j2   : number;
-    time : number
-}
 
 /********* METHODES *********/
 
@@ -46,13 +59,15 @@ var clickBtn = () : void => {
         let player1 : string = $("#player1").val()   as string;
         let player2 : string = $("#player2").val()   as string;
         let sets    : number = $("#nbSets").val()    as number;
+        let set     : number = $("#nbJSets").val()   as number;
         let points  : number = $("#nbPoints").val()  as number;
 
         // Objet de partie
         let obj : dataSendInfoStart = {
             player1 : (player1.length > 0 ? player1 : "Joueur 1"),
-            palyer2 : (player2.length > 0 ? player2 : "Joueur 2"),
+            player2 : (player2.length > 0 ? player2 : "Joueur 2"),
             sets    : (sets           > 0 ? sets    : 2)         ,
+            set     : (set            > 0 ? set     : 6)         ,
             points  : (points         > 0 ? points  : 20)        ,
             start   : new Date()
         }
@@ -68,13 +83,14 @@ var clickBtn = () : void => {
 
 /** JEU */
 let game : Badminton;
-/** HISTORIQUE DES SETS */
-let logsSets : dataLogSet[] = [];
-/** HISTORIQUE DES POINTS */
-let logsPoints : dataLogPoint[] = [];
 
 // @ts-ignore
-const socket = io();
+const socket = io({
+    reconnection: true,           // Activer la reconnexion automatique
+    reconnectionAttempts: 10,     // Nombre de tentatives de reconnexion
+    reconnectionDelay: 1000,      // Délai entre les tentatives de reconnexion (en ms)
+    reconnectionDelayMax: 5000,   // Délai maximum entre les tentatives de reconnexion (en ms)
+});
 
 let startGame = (socketR : any) => {
 
@@ -175,6 +191,15 @@ class Badminton {
     /** ID de la room du socket */
     private roomId : string;
 
+    /** Historique des jeux */
+    private logsGames : dataLogJeu[];
+    /** Historique des sets */
+    private logsSets  : dataLogSet[];
+    /** Données du match */
+    private logMatch : dataLogMatch;
+    /** Nombre de sets */
+    private numSets : number;
+
 
     constructor ( gameInfos : dataSendInfoStart) {
 
@@ -183,7 +208,7 @@ class Badminton {
         this.gameInfos.sets = Number(this.gameInfos.sets);
 
         this.player1 = new BadmintonPlayer( gameInfos.player1, gameInfos.sets, gameInfos.points );
-        this.player2 = new BadmintonPlayer( gameInfos.palyer2, gameInfos.sets, gameInfos.points );
+        this.player2 = new BadmintonPlayer( gameInfos.player2, gameInfos.sets, gameInfos.points );
         this.service = null;
         this.lastPlayerWon = null;
         this.numberPoint = 0;
@@ -198,6 +223,16 @@ class Badminton {
         this.chronoSet = null;
         this.chronoPoint = null;
         this.roomId = !dev ? randomUID(5) : "dev";
+
+        this.logsGames = [];
+        this.logsSets  = [];
+        this.logMatch = {
+            winner      : 0,
+            time        : 0,
+            numberSet   : 0,
+            gamesList   : []
+        }
+        this.numSets = 0;
 
         socket.emit('createRoom', {roomId : this.roomId});
 
@@ -234,6 +269,187 @@ class Badminton {
 
         await sleep(2000);
 
+        let dataFinMatch : dataLogMatch = {
+            winner      : 1,
+            time        : 1541,
+            numberSet   : 21,
+            gamesList   : [
+                {
+                    player1 : 1,
+                    player2 : 0,
+                    time    : 120,
+                    setsList : [
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 17,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 14,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 7,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 20,
+                            j2   : 4,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 10,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 24,
+                            j2   : 26,
+                            time : 60
+                        }
+                    ]
+                },
+                {
+                    player1 : 1,
+                    player2 : 1,
+                    time    : 245,
+                    setsList : [
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 17,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 14,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 7,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 20,
+                            j2   : 4,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 10,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 24,
+                            j2   : 26,
+                            time : 60
+                        }
+                    ]
+                },
+                {
+                    player1 : 2,
+                    player2 : 1,
+                    time    : 245,
+                    setsList : [
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 17,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 14,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 7,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 20,
+                            j2   : 4,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 21,
+                            j2   : 19,
+                            time : 60
+                        },
+                        {
+                            j1   : 10,
+                            j2   : 20,
+                            time : 60
+                        },
+                        {
+                            j1   : 24,
+                            j2   : 26,
+                            time : 60
+                        }
+                    ]
+                }
+            ]
+        }
+
+        //new PDFBad(dataFinMatch);
+
         // Temporisation pour le début de la partie
         await this.break(!dev ? 30 : 2);
 
@@ -254,7 +470,14 @@ class Badminton {
 
         this.startTimer();
 
+        this.numSets++;
 
+        setInterval(() => {
+
+            this.talk("Mise en veille de l'écran");
+            alert('Mise en veille de l\'écran');
+
+        }, 6*60000);
 
     }
 
@@ -442,7 +665,7 @@ class Badminton {
         let p1 : number = this.player1.getSet();
         let p2 : number = this.player2.getSet();
 
-        if ((p1 >= 6 && Math.abs(p1 - p2) >= 2) || (p2 >= 6 && Math.abs(p2 - p1) >= 2)) {
+        if ((p1 >= this.gameInfos.set && Math.abs(p1 - p2) >= 2) || (p2 >= this.gameInfos.set && Math.abs(p2 - p1) >= 2)) {
 
             this.inGame = false;
 
@@ -464,6 +687,23 @@ class Badminton {
                 this.setInfoTxt("Le joueur " + winPlayer.getNomJoueur() + " a gagné le match !");
                 this.talk("Le joueur " + winPlayer.getNomJoueur() + " a gagné le match !");
 
+                let newGameLog : dataLogJeu = {
+                    player1 : this.player1.getScore(),
+                    player2 : this.player2.getScore(),
+                    time    : this.timeSets,
+                    setsList: this.logsSets
+                }
+
+                this.logsGames.push(newGameLog);
+
+                this.logMatch.gamesList = this.logsGames;
+                this.logMatch.numberSet = this.numSets - 1;
+                this.logMatch.time      = this.timeStart;
+                this.logMatch.winner    = win;
+
+
+
+
                 $(".gam-p2").remove();
                 $(".gam-p1").remove();
 
@@ -474,12 +714,24 @@ class Badminton {
 
                 this.gameEnd = true;
                 this.inGame = false;
+
                 return;
 
             } else {
 
                 this.setInfoTxt("Le joueur " + winPlayer.getNomJoueur() + " a gagné le jeu !");
                 this.talk("Le joueur " + winPlayer.getNomJoueur() + " a gagné le jeu !");
+
+                let newGameLog : dataLogJeu = {
+                    player1 : this.player1.getScore(),
+                    player2 : this.player2.getScore(),
+                    time    : this.timeSets,
+                    setsList: this.logsSets
+                }
+
+                this.logsGames.push(newGameLog);
+
+                this.logsSets = [];
 
                 $(".gam-p2").remove();
                 $(".gam-p1").remove();
@@ -495,7 +747,7 @@ class Badminton {
                 this.player1.resetPoint();
                 this.player2.resetPoint();
 
-                await this.break(45);
+                await this.break(dev ? 3 : 60);
 
                 this.playSong();
 
@@ -531,8 +783,8 @@ class Badminton {
 
             this.playSong();
 
-            this.setInfoTxt("Début du set " + (p1 + p2 + 1));
-            this.talk("Début du set " + (p1 + p2 + 1));
+            this.setInfoTxt("Début du set " + this.numSets);
+            this.talk("Début du set " + this.numSets);
 
             await sleep(2000);
 
@@ -571,15 +823,16 @@ class Badminton {
             this.setInfoTxt("Fin du set pour " + playerN.getNomJoueur());
             this.talk("Fin du set pour " + playerN.getNomJoueur());
 
+            playerN.addSet();
+
             let logedSet : dataLogSet = {
                 j1   : this.player1.getPoint(),
                 j2   : this.player2.getPoint(),
                 time : this.timeSets
             }
 
-            logsSets.push(logedSet);
-
-            playerN.addSet();
+            this.logsSets.push(logedSet);
+            this.numSets++;
 
             $(".grid-all-points").html('');
 
@@ -752,6 +1005,8 @@ class Badminton {
      */
     private playSong() : void {
 
+        if (dev) return;
+
         // Jouer le fichier other/start.mp3
         let audio = new Audio('other/start.mp3');
 
@@ -765,6 +1020,8 @@ class Badminton {
      * @private
      */
     private importantPoint() : void {
+
+        if (dev) return;
 
         let audio = new Audio('other/horn.mp3');
 
@@ -782,7 +1039,7 @@ class Badminton {
         let p1 : number = playPoint.getSet();
         let p2 : number = otherPlay.getSet();
 
-        return p1 + 1 >= 6 && p1 - p2 >= 1;
+        return p1 + 1 >= this.gameInfos.set && p1 - p2 >= 1;
 
     }
 
@@ -834,6 +1091,18 @@ class Badminton {
             this.newPoint(player);
 
         })
+
+    }
+
+    /**
+     * Récupérer les informations du match à la fin du match
+     * @return {dataLogMatch | null} Informations du match ou null si le match n'est pas terminé
+     */
+    public getMatchInfos () : dataLogMatch | null {
+
+        if (!this.gameEnd) return null;
+
+        return this.logMatch;
 
     }
 

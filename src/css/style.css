@@ -162,6 +162,8 @@ button.go
     padding: 20px 40px;
     cursor: pointer;
     background: #053C2C;
+    user-select: none;
+    -webkit-user-select: none;
 }
 button.go:disabled
 {

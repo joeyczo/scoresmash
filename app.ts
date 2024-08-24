@@ -4,12 +4,16 @@
  * License : Apache-2.0, Août 2024
  */
 
+// @ts-ignore
 import express from 'express';
+// @ts-ignore
 import path, { join } from 'path';
 import { fileURLToPath } from 'url';
+// @ts-ignore
 import favicon from 'serve-favicon';
 // @ts-ignore
 import { Server } from 'socket.io';
+// @ts-ignore
 import http from "http";
 
 const app = express();

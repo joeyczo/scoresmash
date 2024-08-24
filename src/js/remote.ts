@@ -17,9 +17,6 @@ interface dataRemote {
 
 /********* METHODES *********/
 
-// @ts-ignore
-var dev : boolean = false; // TODO : Changer
-
 var joinSession = () => {
 
     sessionStorage.clear();
@@ -106,7 +103,7 @@ class BadRemote {
 $(() => {
 
     $(".point-btn").on('touchstart', () => {
-        timeoutBtn = setTimeout(() => {addPointPlayer()}, 2000);
+        timeoutBtn = setTimeout(() => {addPointPlayer()}, 500);
     })
 
     $(".point-btn").on('touchend', () => {
