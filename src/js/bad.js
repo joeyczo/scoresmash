@@ -16,7 +16,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 /********* DÉPENDANCES *********/
 /********* INTERFACES *********/
 // @ts-ignore
-var dev = true; // TODO : Changer
+var dev = false; // TODO : Changer
 /********* METHODES *********/
 /**
  * Début du jeu lors du click sur le bouton
@@ -327,7 +327,6 @@ class Badminton {
                     }
                 ]
             };
-            this.printPDFMatch(dataFinMatch);
             // Affichage des informations
             $("#joueur1 p").text(this.player1.getNomJoueur());
             $("#joueur2 p").text(this.player2.getNomJoueur());
@@ -524,6 +523,7 @@ class Badminton {
                     yield sleep(2000);
                     this.gameEnd = true;
                     this.inGame = false;
+                    this.printPDFMatch();
                     return;
                 }
                 else {

@@ -439,8 +439,6 @@ class Badminton {
             ]
         }
 
-        this.printPDFMatch(dataFinMatch);
-
         // Affichage des informations
         $("#joueur1 p").text( this.player1.getNomJoueur() );
         $("#joueur2 p").text( this.player2.getNomJoueur() );
@@ -723,6 +721,8 @@ class Badminton {
                 this.gameEnd = true;
                 this.inGame = false;
 
+                this.printPDFMatch();
+
                 return;
 
             } else {
@@ -762,6 +762,7 @@ class Badminton {
                 this.setInfoTxt("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
 
                 this.talk("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
+                this.talk(this.service?.getNomJoueur() + " sert");
 
                 await sleep(2000);
 
@@ -831,8 +832,6 @@ class Badminton {
             this.setInfoTxt("Fin du set pour " + playerN.getNomJoueur());
             this.talk("Fin du set pour " + playerN.getNomJoueur());
 
-            playerN.addSet();
-
             let logedSet : dataLogSet = {
                 j1   : this.player1.getPoint(),
                 j2   : this.player2.getPoint(),
@@ -841,6 +840,8 @@ class Badminton {
 
             this.logsSets.push(logedSet);
             this.numSets++;
+
+            playerN.addSet();
 
             $(".grid-all-points").html('');
 

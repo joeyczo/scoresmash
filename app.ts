@@ -107,10 +107,3 @@ io.on('connection', (socket : any) => {
 server.listen(port, () => {
     console.log(`En cours sur : http://localhost:${port}`);
 });
-
-
-/** SOCKETS **/
-
-io.on('test', () => {
-    console.log("OK");
-})
