@@ -12,8 +12,6 @@ import { fileURLToPath } from 'url';
 // @ts-ignore
 import favicon from 'serve-favicon';
 // @ts-ignore
-import { Server } from 'socket.io';
-// @ts-ignore
 import http from "http";
 
 const app = express();
@@ -25,7 +23,6 @@ const port = 3000;
 const __filename = fileURLToPath(import.meta.url);
 // Obtenir le nom du répertoire à partir du chemin
 const __dirname = path.dirname(__filename);
-const io = new Server(server);
 
 app.use(express.static(join(__dirname, 'src')));
 app.use(express.static(join(__dirname, 'socket.io')));
@@ -54,55 +51,6 @@ app.get('/badminton', (req, res) => {
 app.get('/pdfBad', (req, res) => {
     res.sendFile(path.join(__dirname, 'src/pdf/pdfBad.html'));
 })
-
-io.on('connection', (socket : any) => {
-    console.log('a user connected');
-
-    socket.on('disconnect', () => {
-        console.log('user disconnected');
-    });
-
-    socket.on('createRoom', (room : {roomId : string}) : void => {
-
-        socket.join(room.roomId);
-        console.log(`Room ${room.roomId} created`);
-
-    })
-
-    socket.on('joinRoom', (room : {roomId : string}) : void => {
-
-        socket.join(room.roomId);
-        console.log(`Room ${room.roomId} joined`);
-
-    });
-
-    socket.on('testSocketRoom', (room : {roomId : string}) : void => {
-
-        io.to(room.roomId).emit('confirmRoom', {roomId : room.roomId});
-
-    });
-
-    socket.on('getPlayerName', (room : {roomId : string}) : void => {
-
-        io.to(room.roomId).emit('fetchPlayerName');
-
-    });
-
-    socket.on('sendPlayersName', (room : {roomId : string}, players : any) => {
-
-        console.log("Players : ", players);
-
-        io.to(room.roomId).emit('fetchPlayersName', players);
-
-    });
-
-    socket.on('newPoint', (room : {roomId : string}, player : number) : void => {
-
-        io.to(room.roomId).emit('addPoint', player);
-
-    });
-
-});
 
 server.listen(port, () => {
     console.log(`En cours sur : http://localhost:${port}`);

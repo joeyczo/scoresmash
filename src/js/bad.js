@@ -45,14 +45,7 @@ var clickBtn = () => {
 };
 /** JEU */
 let game;
-// @ts-ignore
-const socket = io({
-    reconnection: true, // Activer la reconnexion automatique
-    reconnectionAttempts: 10, // Nombre de tentatives de reconnexion
-    reconnectionDelay: 1000, // Délai entre les tentatives de reconnexion (en ms)
-    reconnectionDelayMax: 5000, // Délai maximum entre les tentatives de reconnexion (en ms)
-});
-let startGame = (socketR) => {
+let startGame = () => {
     let dataGame = sessionStorage.getItem("dataGame");
     if (dataGame === null)
         window.location.href = '/';
@@ -127,10 +120,7 @@ class Badminton {
             gamesList: []
         };
         this.numSets = 0;
-        socket.emit('createRoom', { roomId: this.roomId });
-        socket.emit('testSocketRoom', { roomId: this.roomId });
-        this.setInfoTxt("Code d'accès : " + this.roomId);
-        this.initSocket();
+        $("button.go").show();
     }
     /**
      * Démarrer le jeu
@@ -353,10 +343,6 @@ class Badminton {
             this.newSet(true);
             this.startTimer();
             this.numSets++;
-            setInterval(() => {
-                this.talk("Mise en veille de l'écran");
-                alert('Mise en veille de l\'écran');
-            }, 6 * 60000);
         });
     }
     /**
@@ -454,6 +440,7 @@ class Badminton {
      */
     newSet() {
         return __awaiter(this, arguments, void 0, function* (init = false) {
+            var _a;
             // Initialiser un nouveau set lors d'un nouveau jeu
             if (init) {
                 this.timeSets = 0;
@@ -550,6 +537,7 @@ class Badminton {
                     this.playSong();
                     this.setInfoTxt("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
                     this.talk("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
+                    this.talk(((_a = this.service) === null || _a === void 0 ? void 0 : _a.getNomJoueur()) + " sert");
                     yield sleep(2000);
                     yield this.train();
                     this.newSet(true);
@@ -595,7 +583,6 @@ class Badminton {
             if (playerN.getPoint() + 1 >= this.gameInfos.points && Math.abs(playerN.getPoint() + 1 - otherPlayer.getPoint()) >= 2) {
                 this.setInfoTxt("Fin du set pour " + playerN.getNomJoueur());
                 this.talk("Fin du set pour " + playerN.getNomJoueur());
-                playerN.addSet();
                 let logedSet = {
                     j1: this.player1.getPoint(),
                     j2: this.player2.getPoint(),
@@ -603,6 +590,7 @@ class Badminton {
                 };
                 this.logsSets.push(logedSet);
                 this.numSets++;
+                playerN.addSet();
                 $(".grid-all-points").html('');
                 let playerLead = (playerN.getSet() > otherPlayer.getSet() ? playerN : otherPlayer);
                 let playerLose = (playerN.getSet() > otherPlayer.getSet() ? otherPlayer : playerN);
@@ -775,26 +763,6 @@ class Badminton {
         console.log(this.balleDeJeu(playPoint, otherPlay));
         console.log(p1 + 1 === this.gameInfos.sets);
         return this.balleDeJeu(playPoint, otherPlay) && p1 + 1 === this.gameInfos.sets;
-    }
-    /**
-     * Faire fonctionner les sockets
-     * @private
-     */
-    initSocket() {
-        console.log(this.roomId);
-        socket.on('confirmRoom', () => {
-            $("button.go").show();
-        });
-        socket.on('fetchPlayerName', () => {
-            let dataPlayer = {
-                player1: this.player1.getNomJoueur(),
-                player2: this.player2.getNomJoueur()
-            };
-            socket.emit('sendPlayersName', { roomId: this.roomId }, dataPlayer);
-        });
-        socket.on('addPoint', (player) => {
-            this.newPoint(player);
-        });
     }
     /**
      * Récupérer les informations du match à la fin du match

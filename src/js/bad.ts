@@ -82,15 +82,7 @@ var clickBtn = () : void => {
 /** JEU */
 let game : Badminton;
 
-// @ts-ignore
-const socket = io({
-    reconnection: true,           // Activer la reconnexion automatique
-    reconnectionAttempts: 10,     // Nombre de tentatives de reconnexion
-    reconnectionDelay: 1000,      // Délai entre les tentatives de reconnexion (en ms)
-    reconnectionDelayMax: 5000,   // Délai maximum entre les tentatives de reconnexion (en ms)
-});
-
-let startGame = (socketR : any) => {
+let startGame = () => {
 
     let dataGame = sessionStorage.getItem("dataGame") as string;
 
@@ -232,13 +224,7 @@ class Badminton {
         }
         this.numSets = 0;
 
-        socket.emit('createRoom', {roomId : this.roomId});
-
-        socket.emit('testSocketRoom', {roomId : this.roomId});
-
-        this.setInfoTxt("Code d'accès : " + this.roomId);
-
-        this.initSocket();
+        $("button.go").show();
 
     }
 
@@ -477,13 +463,6 @@ class Badminton {
         this.startTimer();
 
         this.numSets++;
-
-        setInterval(() => {
-
-            this.talk("Mise en veille de l'écran");
-            alert('Mise en veille de l\'écran');
-
-        }, 6*60000);
 
     }
 
@@ -1071,35 +1050,6 @@ class Badminton {
         console.log(p1+1 === this.gameInfos.sets as number)
 
         return this.balleDeJeu(playPoint, otherPlay) && p1+1 === this.gameInfos.sets as number;
-
-    }
-
-    /**
-     * Faire fonctionner les sockets
-     * @private
-     */
-    private initSocket() : void {
-
-        console.log(this.roomId);
-
-        socket.on('confirmRoom', () => {
-            $("button.go").show();
-        });
-
-        socket.on('fetchPlayerName', () => {
-            let dataPlayer = {
-                player1 : this.player1.getNomJoueur(),
-                player2 : this.player2.getNomJoueur()
-            }
-
-            socket.emit('sendPlayersName', {roomId : this.roomId}, dataPlayer);
-        });
-
-        socket.on('addPoint', (player : number) => {
-
-            this.newPoint(player);
-
-        })
 
     }
 

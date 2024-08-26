@@ -269,7 +269,7 @@
         doc.text('Page ' + j, doc.internal.pageSize.getWidth() - 37, 615, {align: 'right'});
 
     }
-    doc.save('scores.pdf');
+    doc.save('scores ' + new Date().toLocaleDateString('fr-FR').replaceAll('/', '-') + '.pdf');
 
     window.close();
 
