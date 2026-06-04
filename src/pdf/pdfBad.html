@@ -14,7 +14,6 @@
     <title>Score Smash</title>
     <link rel="stylesheet" href="../css/style.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://unpkg.com/jspdf@1.5.3/dist/jspdf.min.js"></script>
     <script src="pdf/Inter-Regular-normal.js"></script>
 </head>
@@ -25,253 +24,440 @@
 </body>
 <script>
 
+    /********* OUTILS *********/
+
     var formatTime = (secondes) => {
         const heures = Math.floor(secondes / 3600);
         const minutes = Math.floor((secondes % 3600) / 60);
         const secs = secondes % 60;
 
-        const formattedHours = String(heures).padStart(2, '0');
-        const formattedMinutes = String(minutes).padStart(2, '0');
-        const formattedSeconds = String(secs).padStart(2, '0');
+        const h = String(heures).padStart(2, '0');
+        const m = String(minutes).padStart(2, '0');
+        const s = String(secs).padStart(2, '0');
 
-        return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+        return heures > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
     }
+
+    var trunc = (txt, n) => {
+        txt = String(txt);
+        return txt.length > n ? txt.slice(0, n - 1) + '.' : txt;
+    }
+
+    // Met à jour le message affiché à l'écran (état de la génération)
+    var setStatus = (msg) => {
+        let h = document.querySelector('h1');
+        if (h) h.textContent = msg;
+    }
+
+    /********* STATISTIQUES *********/
+
+    // Aplatit tous les sets du match avec leur contexte (jeu / position)
+    var buildSets = (match) => {
+        let sets = [];
+        match.gamesList.forEach((g, gi) => {
+            g.setsList.forEach((s, si) => {
+                sets.push({ gi: gi, si: si, j1: s.j1, j2: s.j2, time: s.time, points: s.points || [] });
+            });
+        });
+        return sets;
+    }
+
+    // Rejoue un set échange par échange pour en extraire les stats fines
+    var replaySet = (points, threshold) => {
+        if (!points || points.length === 0) return null;
+        let a = 0, b = 0, curA = 0, curB = 0, maxA = 0, maxB = 0;
+        let leadChanges = 0, prevLeader = 0, spA = 0, spB = 0, savedByA = 0, savedByB = 0;
+        for (let w of points) {
+            let aSP = (a + 1 >= threshold) && ((a + 1) - b >= 2); // balle de set pour 1
+            let bSP = (b + 1 >= threshold) && ((b + 1) - a >= 2); // balle de set pour 2
+            if (aSP) spA++;
+            if (bSP) spB++;
+            if (w === 1) { a++; curA++; curB = 0; if (curA > maxA) maxA = curA; if (bSP) savedByA++; }
+            else         { b++; curB++; curA = 0; if (curB > maxB) maxB = curB; if (aSP) savedByB++; }
+            let leader = a > b ? 1 : (b > a ? 2 : 0);
+            if (leader !== 0 && prevLeader !== 0 && leader !== prevLeader) leadChanges++;
+            if (leader !== 0) prevLeader = leader;
+        }
+        let winner = a > b ? 1 : 2;
+        // Plus gros retard surmonté par le vainqueur du set
+        let a2 = 0, b2 = 0, deficit = 0;
+        for (let w of points) {
+            if (w === 1) a2++; else b2++;
+            let d = winner === 1 ? (b2 - a2) : (a2 - b2);
+            if (d > deficit) deficit = d;
+        }
+        return { maxStreakA: maxA, maxStreakB: maxB, leadChanges: leadChanges,
+                 setPointsA: spA, setPointsB: spB, savedByA: savedByA, savedByB: savedByB,
+                 winner: winner, comebackDeficit: deficit };
+    }
+
+    var computeStats = (match) => {
+        let threshold = match.pointsPerSet || 21;
+        let sets = buildSets(match);
+        sets.forEach(s => s.r = replaySet(s.points, threshold));
+
+        let totalPoints = sets.reduce((a, s) => a + s.j1 + s.j2, 0);
+        let pointsP1 = sets.reduce((a, s) => a + s.j1, 0);
+        let pointsP2 = sets.reduce((a, s) => a + s.j2, 0);
+        let setsWonP1 = sets.filter(s => s.j1 > s.j2).length;
+        let setsWonP2 = sets.filter(s => s.j2 > s.j1).length;
+
+        let timed = sets.filter(s => s.time > 0);
+        let fastest = timed.length ? timed.reduce((m, s) => s.time < m.time ? s : m) : null;
+        let longest = timed.length ? timed.reduce((m, s) => s.time > m.time ? s : m) : null;
+        let avgTime = timed.length ? Math.round(timed.reduce((a, s) => a + s.time, 0) / timed.length) : 0;
+
+        let mostPoints = sets.reduce((m, s) => (s.j1 + s.j2) > (m.j1 + m.j2) ? s : m, sets[0]);
+        let closest = sets.reduce((m, s) => Math.abs(s.j1 - s.j2) < Math.abs(m.j1 - m.j2) ? s : m, sets[0]);
+        let blowout = sets.reduce((m, s) => Math.abs(s.j1 - s.j2) > Math.abs(m.j1 - m.j2) ? s : m, sets[0]);
+        let shutout = sets.find(s => s.j1 === 0 || s.j2 === 0) || null;
+
+        let bestStreakP1 = { len: 0, setIdx: -1 }, bestStreakP2 = { len: 0, setIdx: -1 };
+        let savesP1 = 0, savesP2 = 0;
+        let comeback = { deficit: 0, setIdx: -1, winner: 0 };
+        let contested = { changes: -1, setIdx: -1 };
+        sets.forEach((s, idx) => {
+            if (!s.r) return;
+            if (s.r.maxStreakA > bestStreakP1.len) bestStreakP1 = { len: s.r.maxStreakA, setIdx: idx };
+            if (s.r.maxStreakB > bestStreakP2.len) bestStreakP2 = { len: s.r.maxStreakB, setIdx: idx };
+            savesP1 += s.r.savedByA;
+            savesP2 += s.r.savedByB;
+            if (s.r.comebackDeficit > comeback.deficit) comeback = { deficit: s.r.comebackDeficit, setIdx: idx, winner: s.r.winner };
+            if (s.r.leadChanges > contested.changes) contested = { changes: s.r.leadChanges, setIdx: idx };
+        });
+
+        return { sets: sets, threshold: threshold, totalPoints: totalPoints, pointsP1: pointsP1, pointsP2: pointsP2,
+                 setsWonP1: setsWonP1, setsWonP2: setsWonP2, fastest: fastest, longest: longest, avgTime: avgTime,
+                 mostPoints: mostPoints, closest: closest, blowout: blowout, shutout: shutout,
+                 bestStreakP1: bestStreakP1, bestStreakP2: bestStreakP2, savesP1: savesP1, savesP2: savesP2,
+                 comeback: comeback, contested: contested };
+    }
+
+    /********* DONNÉES *********/
+
+    try {
 
     let dataMatch = JSON.parse(localStorage.getItem('dataMatch'));
 
-    let doc = new jsPDF({
-        unit : 'px'
+    // Garde-fou : pas de match en mémoire (ex : page ouverte hors d'une fin de partie)
+    if (!dataMatch || !dataMatch.gamesList || dataMatch.gamesList.length === 0)
+        throw new Error('__NODATA__');
+
+    let p1Name = dataMatch.player1Name || 'Joueur 1';
+    let p2Name = dataMatch.player2Name || 'Joueur 2';
+
+    let lastGame = dataMatch.gamesList[dataMatch.gamesList.length - 1];
+    let gamesP1 = lastGame.player1;
+    let gamesP2 = lastGame.player2;
+
+    let stats = computeStats(dataMatch);
+
+    let nameOf = (n) => n === 1 ? p1Name : p2Name;
+
+    let setLabelByIdx = (idx) => {
+        if (idx < 0 || idx >= stats.sets.length) return '-';
+        let s = stats.sets[idx];
+        return (dataMatch.gamesList.length > 1 ? ('J' + (s.gi + 1) + ' - ') : '') + 'Set ' + (s.si + 1);
+    }
+
+    /********* RENDU *********/
+
+    let doc = new jsPDF({ unit: 'px' });
+    doc.setFont('inter', 'bold');
+
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+    const M = 14;
+
+    const C = {
+        bg:     [160, 228, 196],
+        mid:    [129, 194, 166],
+        card:   [79, 140, 117],
+        dark:   [5, 60, 44],
+        accent: [6, 128, 92],
+        white:  [255, 255, 255],
+        muted:  [105, 138, 128],
+        ink:    [0, 29, 20]
+    };
+
+    let setFill = (c) => doc.setFillColor(c[0], c[1], c[2]);
+    let setText = (c) => doc.setTextColor(c[0], c[1], c[2]);
+
+    let bg = () => { setFill(C.bg); doc.rect(0, 0, W, H, 'F'); }
+
+    let footer = (page) => {
+        setText(C.ink);
+        doc.setFontSize(8);
+        doc.setFontType('medium');
+        doc.text('ScoreSmash - ' + new Date().toLocaleDateString('fr-FR'), M + 2, H - 16);
+        doc.text('Page ' + page, W - M - 2, H - 16, { align: 'right' });
+    }
+
+    // Carte de statistique : libellé en petit, valeur en gros, contexte en bas
+    let statCard = (x, y, w, h, label, value, sub, o) => {
+        o = o || {};
+        setFill(o.fill || C.card);
+        doc.roundedRect(x, y, w, h, 8, 8, 'F');
+
+        setText(o.labelColor || C.bg);
+        doc.setFontSize(8);
+        doc.setFontType('medium');
+        doc.text(String(label).toUpperCase(), x + 12, y + 18);
+
+        setText(o.valueColor || C.white);
+        doc.setFontSize(o.valueSize || 19);
+        doc.setFontType('bold');
+        doc.text(trunc(value, 22), x + 12, y + 44);
+
+        if (sub) {
+            setText(o.subColor || C.bg);
+            doc.setFontSize(8);
+            doc.setFontType('medium');
+            doc.text(trunc(sub, 30), x + 12, y + h - 12);
+        }
+    }
+
+    /***** PAGE 1 : RÉSUMÉ *****/
+
+    bg();
+
+    setText(C.dark);
+    doc.setFontSize(30);
+    doc.setFontType('bold');
+    doc.text('Résumé du match', M + 2, 42);
+
+    // Bandeau vainqueur
+    setFill(C.dark);
+    doc.roundedRect(M, 58, W - 2 * M, 66, 10, 10, 'F');
+    setText(C.bg);
+    doc.setFontSize(10);
+    doc.setFontType('medium');
+    doc.text('VAINQUEUR', M + 16, 82);
+    setText(C.white);
+    doc.setFontSize(26);
+    doc.setFontType('bold');
+    doc.text(trunc(dataMatch.winner, 18), M + 16, 110);
+    setText(C.accent);
+    doc.setFontSize(34);
+    doc.text(gamesP1 + ' - ' + gamesP2, W - M - 16, 105, { align: 'right' });
+
+    // Colonnes joueurs (points / sets / jeux)
+    let colW = (W - 2 * M - 10) / 2;
+    let py = 138, ph = 118;
+
+    let playerCol = (x, name, pts, setsW, gamesW, isWinner) => {
+        setFill(isWinner ? C.accent : C.mid);
+        doc.roundedRect(x, py, colW, ph, 10, 10, 'F');
+        setText(isWinner ? C.white : C.dark);
+        doc.setFontSize(15);
+        doc.setFontType('bold');
+        doc.text(trunc(name, 16), x + 14, py + 26);
+
+        let line = (ly, lbl, val) => {
+            setText(isWinner ? C.bg : C.muted);
+            doc.setFontSize(9);
+            doc.setFontType('medium');
+            doc.text(lbl, x + 14, ly);
+            setText(isWinner ? C.white : C.dark);
+            doc.setFontSize(15);
+            doc.setFontType('bold');
+            doc.text(String(val), x + colW - 14, ly, { align: 'right' });
+        }
+        line(py + 56, 'Points', pts);
+        line(py + 82, 'Sets gagnés', setsW);
+        line(py + 108, 'Jeux gagnés', gamesW);
+    }
+
+    playerCol(M, p1Name, stats.pointsP1, stats.setsWonP1, gamesP1, dataMatch.winner === p1Name);
+    playerCol(M + colW + 10, p2Name, stats.pointsP2, stats.setsWonP2, gamesP2, dataMatch.winner === p2Name);
+
+    // Cartes méta
+    let my = py + ph + 10, mh = 60;
+    let mw = (W - 2 * M - 20) / 3;
+    let metaCard = (x, label, value) => {
+        setFill(C.card);
+        doc.roundedRect(x, my, mw, mh, 8, 8, 'F');
+        setText(C.bg);
+        doc.setFontSize(8);
+        doc.setFontType('medium');
+        doc.text(label.toUpperCase(), x + 10, my + 18);
+        setText(C.white);
+        doc.setFontSize(18);
+        doc.setFontType('bold');
+        doc.text(String(value), x + 10, my + 44);
+    }
+    metaCard(M, 'Durée', formatTime(dataMatch.time));
+    metaCard(M + mw + 10, 'Sets joués', stats.sets.length);
+    metaCard(M + 2 * (mw + 10), 'Points joués', stats.totalPoints);
+
+    // Graphique : points par set
+    let cy = my + mh + 22;
+    setText(C.dark);
+    doc.setFontSize(13);
+    doc.setFontType('bold');
+    doc.text('Points par set', M + 2, cy);
+
+    // Légende
+    setFill(C.accent); doc.rect(M + 120, cy - 9, 10, 10, 'F');
+    setText(C.dark); doc.setFontSize(9); doc.setFontType('medium');
+    doc.text(trunc(p1Name, 10), M + 134, cy);
+    setFill(C.dark); doc.rect(M + 220, cy - 9, 10, 10, 'F');
+    doc.text(trunc(p2Name, 10), M + 234, cy);
+
+    let chX = M, chY = cy + 14, chW = W - 2 * M, chH = H - chY - 40;
+    setFill(C.mid);
+    doc.roundedRect(chX, chY, chW, chH, 10, 10, 'F');
+
+    let innerX = chX + 14, innerY = chY + 14, innerW = chW - 28, innerH = chH - 34;
+    let maxV = Math.max(1, ...stats.sets.map(s => Math.max(s.j1, s.j2)));
+    let groupW = innerW / stats.sets.length;
+    let barW = Math.min(11, groupW / 2.6);
+    stats.sets.forEach((s, i) => {
+        let gx = innerX + i * groupW + groupW / 2;
+        let h1 = (s.j1 / maxV) * innerH, h2 = (s.j2 / maxV) * innerH;
+        setFill(C.accent); doc.rect(gx - barW - 1, innerY + innerH - h1, barW, h1, 'F');
+        setFill(C.dark);   doc.rect(gx + 1, innerY + innerH - h2, barW, h2, 'F');
+        setText(C.dark); doc.setFontSize(7); doc.setFontType('medium');
+        doc.text('' + (i + 1), gx, innerY + innerH + 11, { align: 'center' });
     });
 
+    footer(1);
 
-    console.log(doc.getFontList())
-    console.log(doc.internal.pageSize.getWidth() + " x " + doc.internal.pageSize.getHeight())
+    /***** PAGE 2 : FAITS MARQUANTS *****/
 
-    doc.setFillColor(160, 228, 196);
-    doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+    doc.addPage();
+    bg();
 
-    doc.setFontSize(40);
-    doc.setFont('inter', 'bold');
-    doc.setTextColor(5, 60, 44);
-    doc.text('Résumé des scores', 97, 49);
+    setText(C.dark);
+    doc.setFontSize(30);
+    doc.setFontType('bold');
+    doc.text('Faits marquants', M + 2, 42);
 
-    doc.setFontSize(12);
-    doc.setFontType('medium')
+    let bs = stats.bestStreakP1.len >= stats.bestStreakP2.len
+        ? { len: stats.bestStreakP1.len, idx: stats.bestStreakP1.setIdx, who: 1 }
+        : { len: stats.bestStreakP2.len, idx: stats.bestStreakP2.setIdx, who: 2 };
 
-    doc.text("Durée du match :", 16, 100)
-    doc.text("Nombre de sets :", 156, 100)
-    doc.text("Gagnant :", 307, 100);
+    let cards = [
+        { l: 'Plus longue série', v: bs.len > 0 ? (bs.len + ' pts d\'affilée') : '-',
+          s: bs.len > 0 ? (trunc(nameOf(bs.who), 14) + ' - ' + setLabelByIdx(bs.idx)) : 'Donnée indispo.', fill: C.accent },
+        { l: 'Balles de set sauvées', v: stats.savesP1 + ' / ' + stats.savesP2,
+          s: trunc(p1Name, 12) + ' / ' + trunc(p2Name, 12) },
+        { l: 'Set le plus rapide', v: stats.fastest ? (stats.fastest.j1 + '-' + stats.fastest.j2) : '-',
+          s: stats.fastest ? formatTime(stats.fastest.time) : '-' },
+        { l: 'Set le plus long', v: stats.longest ? (stats.longest.j1 + '-' + stats.longest.j2) : '-',
+          s: stats.longest ? formatTime(stats.longest.time) : '-' },
+        { l: 'Set le plus prolifique', v: stats.mostPoints.j1 + '-' + stats.mostPoints.j2,
+          s: (stats.mostPoints.j1 + stats.mostPoints.j2) + ' points joués' },
+        { l: 'Set le plus serré', v: stats.closest.j1 + '-' + stats.closest.j2,
+          s: 'écart de ' + Math.abs(stats.closest.j1 - stats.closest.j2) },
+        { l: 'Plus gros écart', v: stats.blowout.j1 + '-' + stats.blowout.j2,
+          s: 'écart de ' + Math.abs(stats.blowout.j1 - stats.blowout.j2) },
+        { l: 'Set blanc', v: stats.shutout ? (stats.shutout.j1 + '-' + stats.shutout.j2) : 'Aucun',
+          s: stats.shutout ? 'Un joueur à zéro' : 'Personne blanchi' },
+        { l: 'Plus grosse remontée', v: stats.comeback.deficit > 0 ? ('mené de ' + stats.comeback.deficit) : '-',
+          s: stats.comeback.deficit > 0 ? (trunc(nameOf(stats.comeback.winner), 14) + ' - ' + setLabelByIdx(stats.comeback.setIdx)) : 'Donnée indispo.' },
+        { l: 'Set le plus disputé', v: stats.contested.changes >= 0 ? (stats.contested.changes + ' chgmts de leader') : '-',
+          s: stats.contested.changes >= 0 ? setLabelByIdx(stats.contested.setIdx) : 'Donnée indispo.' }
+    ];
 
-    doc.setFontType("bold")
+    let gcolW = (W - 2 * M - 10) / 2;
+    let gcardH = 90, gapY = 8, gy0 = 64;
+    cards.forEach((c, i) => {
+        let col = i % 2, row = Math.floor(i / 2);
+        let x = M + col * (gcolW + 10);
+        let y = gy0 + row * (gcardH + gapY);
+        statCard(x, y, gcolW, gcardH, c.l, c.v, c.s, c.fill ? { fill: c.fill } : {});
+    });
 
-    doc.text(formatTime(dataMatch.time) + "", 135, 100, {align: "right"});
-    doc.text(dataMatch.numberSet + "", 280, 100, {align: "right"});
-    doc.text(dataMatch.winner + "", 430, 100, {align: "right"});
+    footer(2);
 
-    //doc.text(JSON.stringify(dataMatch, null, 4), 20, 60);
+    /***** PAGES 3+ : HISTORIQUE PAR JEU *****/
 
-    doc.setFillColor(5, 60, 44);
-    doc.roundedRect(68, 130, 311, 4, 5, 5, 'F');
-
-    /**** JEU 1 ****/
-
-    doc.setFillColor(129, 194, 166);
-    doc.roundedRect(12, 161, doc.internal.pageSize.getWidth() - 24, 430, 10, 10, 'F')
-
-    doc.setFontSize(20)
-
-    doc.text("Jeu 1", 20, 185);
-    doc.text(dataMatch.gamesList[0].player1 + " - " + dataMatch.gamesList[0].player2, doc.internal.pageSize.getWidth() - 20, 185, {align: 'right'});
-
-    doc.setTextColor(255,255,255);
-
-    let xStart = 20;
-    let yStart = 200;
-
-    let p1Set = 0;
-    let p2Set = 0;
-
-    doc.setFontSize(12)
-
-    for (let i = 1; i <= dataMatch.gamesList[0].setsList.length && i <= 15; i++) {
-
-        doc.setTextColor(255,255,255);
-
-        let dataSet = dataMatch.gamesList[0].setsList[i - 1];
-
-        doc.setFillColor(79, 140, 117);
-        doc.roundedRect(xStart, yStart, 128, 70, 5, 5, 'F');
-
-        doc.setFontSize(15)
-        doc.setFontType("bold")
-
-        if (dataSet.j1 > dataSet.j2) p1Set++;
-        else                         p2Set++;
-
-        doc.text("Set " + i, xStart + 10, yStart + 15);
-
-        doc.setFontType("medium")
-
-        doc.text(p1Set + "-" + p2Set, xStart - 10 + 128, yStart + 15, {align: 'right'});
-
-        doc.setFillColor(5, 60, 44)
-
-        doc.rect(xStart + 10, yStart + 25, 80, 15, 'F');
-        doc.rect(xStart + 10, yStart + 25 + 15, 80, 15, 'F');
-
-        doc.setFontSize(8)
-
-        doc.setTextColor(255,255,255);
-
-        if (dataSet.j1 < dataSet.j2)
-            doc.setTextColor(105, 138, 128)
-
-        doc.text("Joueur 1", xStart + 13, yStart + 35);
-
-        doc.setTextColor(255,255,255);
-
-        if (dataSet.j2 < dataSet.j1)
-            doc.setTextColor(105, 138, 128)
-
-        doc.text("Joueur 2", xStart + 13, yStart + 35 + 15);
-
-        doc.setFillColor(255, 255, 255)
-        doc.setTextColor(0, 0, 0);
-
-        doc.rect(xStart - 30 + 128, yStart + 25, 20, 15, 'F');
-        doc.rect(xStart - 30 + 128, yStart + 25 + 15, 20, 15, 'F');
-
-        doc.text(dataSet.j1 + "", xStart - 20 + 128, yStart + 35, {align: 'center'});
-        doc.text(dataSet.j2 + "", xStart - 20 + 128, yStart + 35 + 15, {align: 'center'});
-
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(6)
-
-        doc.text(formatTime(dataSet.time) + "", xStart + 10, yStart + 64);
-
-        xStart += 138;
-
-        if (i % 3 === 0 && i !== 0) {
-            xStart = 20;
-            yStart += 77;
-        }
-
-    }
-
-    /**** FOOTER ****/
-
-    doc.setTextColor(0, 29, 20);
-
-    doc.setFontSize(8);
-    doc.text('Session du ' + new Date().toLocaleDateString('fr-FR'), 37, 615);
-    doc.text('Page 1', doc.internal.pageSize.getWidth() - 37, 615, {align: 'right'});
-
-    /**** AUTRE JEUX ****/
-
-    let numPage = 1;
-
-    for (let j = 2; j <= dataMatch.gamesList.length; j++) {
+    dataMatch.gamesList.forEach((g, gi) => {
 
         doc.addPage();
+        bg();
 
-        doc.setFillColor(160, 228, 196);
-        doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+        setText(C.dark);
+        doc.setFontSize(24);
+        doc.setFontType('bold');
+        doc.text('Jeu ' + (gi + 1), M + 2, 42);
 
-        /**** JEU ****/
+        let w1 = g.setsList.filter(s => s.j1 > s.j2).length;
+        let w2 = g.setsList.filter(s => s.j2 > s.j1).length;
+        doc.setFontSize(13);
+        doc.setFontType('medium');
+        doc.text(trunc(p1Name, 10) + '  ' + w1 + ' - ' + w2 + '  ' + trunc(p2Name, 10), W - M - 2, 42, { align: 'right' });
 
-        doc.setFillColor(129, 194, 166);
-        doc.roundedRect(12, 161, doc.internal.pageSize.getWidth() - 24, 430, 10, 10, 'F')
+        // Panneau
+        setFill(C.mid);
+        doc.roundedRect(M, 56, W - 2 * M, H - 110, 10, 10, 'F');
 
-        doc.setFontSize(20)
+        let cardW = (W - 2 * M - 20 - 16) / 3;
+        let cardH = 78;
+        let gapX = 8;
+        let x0 = M + 10, y0 = 78;
+        let p1Set = 0, p2Set = 0;
 
-        doc.text("Jeu " + j, 20, 185);
-        doc.text(dataMatch.gamesList[j - 1].player1 + " - " + dataMatch.gamesList[j - 1].player2, doc.internal.pageSize.getWidth() - 20, 185, {align: 'right'});
+        g.setsList.forEach((s, i) => {
+            if (i >= 15) return; // garde-fou (max ~15 sets affichés)
 
-        doc.setTextColor(255,255,255);
+            let col = i % 3;
+            let row = Math.floor(i / 3);
+            let x = x0 + col * (cardW + gapX);
+            let y = y0 + row * (cardH + 10);
 
-        let xStart = 20;
-        let yStart = 200;
+            if (s.j1 > s.j2) p1Set++; else p2Set++;
 
-        let p1Set = 0;
-        let p2Set = 0;
+            setFill(C.card);
+            doc.roundedRect(x, y, cardW, cardH, 6, 6, 'F');
 
-        for (let i = 1; i <= dataMatch.gamesList[j-1].setsList.length && i <= 15; i++) {
+            setText(C.white);
+            doc.setFontSize(13);
+            doc.setFontType('bold');
+            doc.text('Set ' + (i + 1), x + 10, y + 18);
+            doc.setFontType('medium');
+            doc.text(p1Set + '-' + p2Set, x + cardW - 10, y + 18, { align: 'right' });
 
-            doc.setTextColor(255,255,255);
-
-            let dataSet = dataMatch.gamesList[j-1].setsList[i - 1];
-
-            doc.setFillColor(79, 140, 117);
-            doc.roundedRect(xStart, yStart, 128, 70, 5, 5, 'F');
-
-            doc.setFontSize(15)
-            doc.setFontType("bold")
-
-            if (dataSet.j1 > dataSet.j2) p1Set++;
-            else                         p2Set++;
-
-            doc.text("Set " + i, xStart + 10, yStart + 15);
-
-            doc.setFontType("medium")
-
-            doc.text(p1Set + "-" + p2Set, xStart - 10 + 128, yStart + 15, {align: 'right'});
-
-            doc.setFillColor(5, 60, 44)
-
-            doc.rect(xStart + 10, yStart + 25, 80, 15, 'F');
-            doc.rect(xStart + 10, yStart + 25 + 15, 80, 15, 'F');
-
-            doc.setFontSize(8)
-
-            doc.setTextColor(255,255,255);
-
-            if (dataSet.j1 < dataSet.j2)
-                doc.setTextColor(105, 138, 128)
-
-            doc.text("Joueur 1", xStart + 13, yStart + 35);
-
-            doc.setTextColor(255,255,255);
-
-            if (dataSet.j2 < dataSet.j1)
-                doc.setTextColor(105, 138, 128)
-
-            doc.text("Joueur 2", xStart + 13, yStart + 35 + 15);
-
-            doc.setFillColor(255, 255, 255)
-            doc.setTextColor(0, 0, 0);
-
-            doc.rect(xStart - 30 + 128, yStart + 25, 20, 15, 'F');
-            doc.rect(xStart - 30 + 128, yStart + 25 + 15, 20, 15, 'F');
-
-            doc.text(dataSet.j1 + "", xStart - 20 + 128, yStart + 35, {align: 'center'});
-            doc.text(dataSet.j2 + "", xStart - 20 + 128, yStart + 35 + 15, {align: 'center'});
-
-            doc.setTextColor(255, 255, 255)
-            doc.setFontSize(6)
-
-            doc.text(formatTime(dataSet.time) + "", xStart + 10, yStart + 64);
-
-            xStart += 138;
-
-            if (i % 3 === 0 && i !== 0) {
-                xStart = 20;
-                yStart += 77;
+            // Lignes des deux joueurs (le perdant du set est grisé)
+            let rowLine = (ry, name, val, lost) => {
+                setFill(C.dark);
+                doc.rect(x + 10, ry, cardW - 50, 15, 'F');
+                setText(lost ? C.muted : C.white);
+                doc.setFontSize(8);
+                doc.setFontType('medium');
+                doc.text(trunc(name, 11), x + 14, ry + 11);
+                setFill(C.white);
+                doc.rect(x + cardW - 36, ry, 26, 15, 'F');
+                setText(C.dark);
+                doc.setFontType('bold');
+                doc.text(String(val), x + cardW - 23, ry + 11, { align: 'center' });
             }
+            rowLine(y + 26, p1Name, s.j1, s.j1 < s.j2);
+            rowLine(y + 43, p2Name, s.j2, s.j2 < s.j1);
 
-        }
+            setText(C.bg);
+            doc.setFontSize(7);
+            doc.setFontType('medium');
+            doc.text(formatTime(s.time), x + 10, y + cardH - 6);
+        });
 
-        /**** FOOTER ****/
+        footer(3 + gi);
+    });
 
-        doc.setTextColor(0, 29, 20);
+    let now = new Date();
+    let stamp = now.toLocaleDateString('fr-FR').replaceAll('/', '-')
+              + ' ' + String(now.getHours()).padStart(2, '0') + 'h' + String(now.getMinutes()).padStart(2, '0');
+    doc.save('scores ' + stamp + '.pdf');
 
-        doc.setFontSize(8);
-        doc.text('Session du ' + new Date().toLocaleDateString('fr-FR'), 37, 615);
-        doc.text('Page ' + j, doc.internal.pageSize.getWidth() - 37, 615, {align: 'right'});
+    setStatus('PDF téléchargé. Vous pouvez fermer cet onglet.');
 
+    } catch (e) {
+        setStatus(e.message === '__NODATA__'
+            ? 'Aucun match à imprimer.'
+            : 'Erreur lors de la génération : ' + e.message);
+        console.error(e);
     }
-    doc.save('scores ' + new Date().toLocaleDateString('fr-FR').replaceAll('/', '-') + '.pdf');
-
-    window.close();
 
 </script>
 
