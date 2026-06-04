@@ -18,6 +18,11 @@ interface dataSendInfoStart {
     sets        : number, // Nombre de jeux pour gagner le match
     set         : number, // Nombre de sets pour gagner le jeu
     points      : number, // Nombre de points pour gagner le set
+    training    : boolean, // Échauffement activé ou non
+    timeTrain   : number, // Durée de l'échauffement (En secondes)
+    pauseStart  : number, // Pause avant le début du match (En secondes)
+    pauseSet    : number, // Pause entre les sets (En secondes)
+    pauseGame   : number, // Pause entre les jeux (En secondes)
     start       : Date
 }
 
@@ -60,6 +65,13 @@ var clickBtn = () : void => {
         let set     : number = $("#nbJSets").val()   as number;
         let points  : number = $("#nbPoints").val()  as number;
 
+        // Paramètres avancés (accordéon)
+        let training   : boolean = $("#training").is(":checked");
+        let timeTrain  : number  = Number($("#timeTrain").val());
+        let pauseStart : number  = Number($("#pauseStart").val());
+        let pauseSet   : number  = Number($("#pauseSet").val());
+        let pauseGame  : number  = Number($("#pauseGame").val());
+
         // Objet de partie
         let obj : dataSendInfoStart = {
             player1 : (player1.length > 0 ? player1 : "Joueur 1"),
@@ -67,6 +79,11 @@ var clickBtn = () : void => {
             sets    : (sets           > 0 ? sets    : 2)         ,
             set     : (set            > 0 ? set     : 6)         ,
             points  : (points         > 0 ? points  : 20)        ,
+            training   : training                                ,
+            timeTrain  : (timeTrain  >= 0 ? timeTrain  : 40)     ,
+            pauseStart : (pauseStart >= 0 ? pauseStart : 30)     ,
+            pauseSet   : (pauseSet   >= 0 ? pauseSet   : 45)     ,
+            pauseGame  : (pauseGame  >= 0 ? pauseGame  : 60)     ,
             start   : new Date()
         }
 
@@ -443,7 +460,7 @@ class Badminton {
         await sleep(2000);
 
         // Temporisation pour le début de la partie
-        await this.break(!dev ? 30 : 2);
+        await this.break(!dev ? this.gameInfos.pauseStart : 2);
 
         this.playSong();
 
@@ -505,11 +522,12 @@ class Badminton {
 
         this.inGame = false;
 
-        this.talk("Échauffement de 40 secondes")
+        let time : number = !dev ? (this.gameInfos.training ? this.gameInfos.timeTrain : 0) : 2;
 
-        let time : number = !dev ? 40 : 2;
-
-        this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
+        if (time > 0) {
+            this.talk("Échauffement de " + time + " secondes")
+            this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
+        }
 
         let inT = setInterval(() => {
 
@@ -734,7 +752,7 @@ class Badminton {
                 this.player1.resetPoint();
                 this.player2.resetPoint();
 
-                await this.break(dev ? 3 : 60);
+                await this.break(!dev ? this.gameInfos.pauseGame : 3);
 
                 this.playSong();
 
@@ -767,7 +785,7 @@ class Badminton {
             $(".gam-p1 p").text("0");
             $(".gam-p2 p").text("0");
 
-            await this.break(!dev ? 45 : 2);
+            await this.break(!dev ? this.gameInfos.pauseSet : 2);
 
             this.playSong();
 

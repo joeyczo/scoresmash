@@ -28,6 +28,12 @@ var clickBtn = () => {
         let sets = $("#nbSets").val();
         let set = $("#nbJSets").val();
         let points = $("#nbPoints").val();
+        // Paramètres avancés (accordéon)
+        let training = $("#training").is(":checked");
+        let timeTrain = Number($("#timeTrain").val());
+        let pauseStart = Number($("#pauseStart").val());
+        let pauseSet = Number($("#pauseSet").val());
+        let pauseGame = Number($("#pauseGame").val());
         // Objet de partie
         let obj = {
             player1: (player1.length > 0 ? player1 : "Joueur 1"),
@@ -35,6 +41,11 @@ var clickBtn = () => {
             sets: (sets > 0 ? sets : 2),
             set: (set > 0 ? set : 6),
             points: (points > 0 ? points : 20),
+            training: training,
+            timeTrain: (timeTrain >= 0 ? timeTrain : 40),
+            pauseStart: (pauseStart >= 0 ? pauseStart : 30),
+            pauseSet: (pauseSet >= 0 ? pauseSet : 45),
+            pauseGame: (pauseGame >= 0 ? pauseGame : 60),
             start: new Date()
         };
         // Envoi des informations
@@ -331,7 +342,7 @@ class Badminton {
             this.toggleService();
             yield sleep(2000);
             // Temporisation pour le début de la partie
-            yield this.break(!dev ? 30 : 2);
+            yield this.break(!dev ? this.gameInfos.pauseStart : 2);
             this.playSong();
             // Debut du jeu avec entrainement
             yield this.train();
@@ -375,9 +386,11 @@ class Badminton {
     train() {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
-            this.talk("Échauffement de 40 secondes");
-            let time = !dev ? 40 : 2;
-            this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
+            let time = !dev ? (this.gameInfos.training ? this.gameInfos.timeTrain : 0) : 2;
+            if (time > 0) {
+                this.talk("Échauffement de " + time + " secondes");
+                this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
+            }
             let inT = setInterval(() => {
                 // @ts-ignore
                 time--;
@@ -533,7 +546,7 @@ class Badminton {
                     this.player2.resetSets();
                     this.player1.resetPoint();
                     this.player2.resetPoint();
-                    yield this.break(dev ? 3 : 60);
+                    yield this.break(!dev ? this.gameInfos.pauseGame : 3);
                     this.playSong();
                     this.setInfoTxt("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
                     this.talk("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
@@ -552,7 +565,7 @@ class Badminton {
                 this.player2.resetPoint();
                 $(".gam-p1 p").text("0");
                 $(".gam-p2 p").text("0");
-                yield this.break(!dev ? 45 : 2);
+                yield this.break(!dev ? this.gameInfos.pauseSet : 2);
                 this.playSong();
                 this.setInfoTxt("Début du set " + this.numSets);
                 this.talk("Début du set " + this.numSets);

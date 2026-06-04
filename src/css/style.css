@@ -123,8 +123,8 @@ body .score
 }
 .row-infos
 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     margin: 15px 0;
     width: 80vw;
 }
@@ -140,8 +140,9 @@ body .score
     font-size: 20px;
     border: none;
     border-radius: 10px;
-    margin: 0 15px;
+    margin: 10px 0 0 0;
     padding: 13px;
+    width: 100%;
     color: white
 }
 .row-infos input::placeholder
@@ -168,6 +169,40 @@ button.go
 button.go:disabled
 {
     opacity: 0.4;
+}
+.more-params
+{
+    width: 80vw;
+    margin: 15px 0;
+    color: white;
+}
+.more-params summary
+{
+    background: #053C2C;
+    font-size: 22px;
+    font-weight: 700;
+    padding: 13px;
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.more-params .row-infos
+{
+    width: 100%;
+}
+.more-params .row-infos label
+{
+    font-size: 20px;
+}
+.more-params input[type="checkbox"]
+{
+    background: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    margin: 10px 0 0 0;
+    accent-color: #06805C;
 }
 .grid-all-points
 {

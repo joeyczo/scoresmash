@@ -58,6 +58,52 @@
 
 </div>
 
+<details class="more-params">
+
+    <summary>Plus de paramètres</summary>
+
+    <div class="row-infos check-infos">
+
+        <label for="training">Échauffement</label>
+
+        <input type="checkbox" name="training" id="training" checked>
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="timeTrain">Temps d'échauffement (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="timeTrain" id="timeTrain" value="40">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="pauseStart">Pause début de match (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="pauseStart" id="pauseStart" value="30">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="pauseSet">Pause entre les sets (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="pauseSet" id="pauseSet" value="45">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="pauseGame">Pause entre les jeux (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="pauseGame" id="pauseGame" value="60">
+
+    </div>
+
+</details>
+
 <button onclick="clickBtn()" class="go">
 
     GO
