@@ -48,6 +48,8 @@ var clickBtn = () => {
             pauseGame: (pauseGame >= 0 ? pauseGame : 60),
             start: new Date()
         };
+        // Nouveau match : on oublie toute partie en cours
+        localStorage.removeItem("savedGame");
         // Envoi des informations
         sessionStorage.setItem("dataGame", JSON.stringify(obj));
         // Changement de page
@@ -57,9 +59,28 @@ var clickBtn = () => {
 /** JEU */
 let game;
 let startGame = () => {
+    // Reprise d'un match interrompu (rechargement, onglet vidé par le mobile, ...)
+    let saved = localStorage.getItem("savedGame");
+    if (saved !== null) {
+        let savedObj = JSON.parse(saved);
+        if (confirm("Un match est en cours. Voulez-vous le reprendre ?")) {
+            game = new Badminton(savedObj.gameInfos);
+            game.resume(savedObj);
+            return;
+        }
+        // On exige une seconde confirmation avant d'écraser un match en cours
+        if (!confirm("Démarrer un nouveau match ? Le match en cours sera perdu.")) {
+            game = new Badminton(savedObj.gameInfos);
+            game.resume(savedObj);
+            return;
+        }
+        localStorage.removeItem("savedGame");
+    }
     let dataGame = sessionStorage.getItem("dataGame");
-    if (dataGame === null)
+    if (dataGame === null) {
         window.location.href = '/';
+        return;
+    }
     let obj = JSON.parse(dataGame);
     game = new Badminton(obj);
 };
@@ -84,9 +105,35 @@ let clickUndo = (player) => {
 let downloadPDF = () => {
     window.open('/pdfBad', '_blank');
 };
+/** Verrou empêchant la mise en veille de l'écran pendant un match */
+let wakeLock = null;
+/** Indique si l'on souhaite garder l'écran allumé (pour ré-acquérir le verrou) */
+let wantWakeLock = false;
+let requestWakeLock = () => __awaiter(void 0, void 0, void 0, function* () {
+    wantWakeLock = true;
+    try {
+        let nav = navigator;
+        if ('wakeLock' in nav)
+            wakeLock = yield nav.wakeLock.request('screen');
+    }
+    catch (e) { /* Non supporté ou refusé : on ignore */ }
+});
+let releaseWakeLock = () => {
+    wantWakeLock = false;
+    if (wakeLock !== null) {
+        wakeLock.release();
+        wakeLock = null;
+    }
+};
+// Le verrou est libéré quand l'onglet est masqué : on le ré-acquiert au retour
+document.addEventListener('visibilitychange', () => {
+    if (wantWakeLock && document.visibilityState === 'visible')
+        requestWakeLock();
+});
 let startMatch = () => {
     game.start();
     $("button.go").hide();
+    requestWakeLock();
 };
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -328,6 +375,7 @@ class Badminton {
                 $("#ligne-j2").append(htmlPla2);
                 this.toggleTimerPoint();
                 this.inGame = true;
+                this.saveState();
                 return;
             }
             let gen = this.actionGen;
@@ -367,6 +415,9 @@ class Badminton {
                         return;
                     this.gameEnd = true;
                     this.inGame = false;
+                    // Match terminé : plus rien à reprendre, on libère l'écran
+                    localStorage.removeItem("savedGame");
+                    releaseWakeLock();
                     this.updateUndoButtons();
                     this.printPDFMatch();
                     return;
@@ -438,6 +489,7 @@ class Badminton {
                 this.toggleTimerSet();
                 this.toggleTimerPoint();
                 this.inGame = true;
+                this.saveState();
             }
         });
     }
@@ -537,6 +589,7 @@ class Badminton {
                 }
                 this.timePoints = 0;
                 this.inGame = true;
+                this.saveState();
             }
         });
     }
@@ -739,6 +792,7 @@ class Badminton {
         // Après restauration, getPoint() vaut le score d'avant le point retiré
         this.talk("Un point a été retiré à " + scorer.getNomJoueur() + ", le nouveau score est " + scorer.getPoint());
         this.updateUndoButtons();
+        this.saveState();
     }
     /**
      * Coupe le décompte de pause en cours et vide la file vocale en attente
@@ -780,6 +834,79 @@ class Badminton {
         let en2 = !this.gameEnd && last !== null && !last.scorerIs1;
         $("#undo-j1").prop("disabled", !en1);
         $("#undo-j2").prop("disabled", !en2);
+    }
+    /**
+     * Capture l'état complet du match (logique + affichage) pour la reprise
+     * @return {savedGame}
+     * @private
+     */
+    captureState() {
+        return {
+            gameInfos: this.gameInfos,
+            p1: this.player1.snapshot(),
+            p2: this.player2.snapshot(),
+            serviceIs1: this.service === null ? null : this.service === this.player1,
+            lastWonIs1: this.lastPlayerWon === null ? null : this.lastPlayerWon === this.player1,
+            numberPoint: this.numberPoint,
+            timeStart: this.timeStart,
+            timeSets: this.timeSets,
+            timePoints: this.timePoints,
+            gameEnd: this.gameEnd,
+            numSets: this.numSets,
+            setPoints: this.currentSetPoints.slice(),
+            logsSets: this.logsSets.slice(),
+            logsGames: this.logsGames.slice(),
+            logMatch: this.logMatch,
+            ligneJ1: $("#ligne-j1").html(),
+            ligneJ2: $("#ligne-j2").html(),
+            grid: $(".grid-all-points").html(),
+            info: $("#info_txt").html()
+        };
+    }
+    /**
+     * Sauvegarde le match en cours dans le localStorage (survit au rechargement)
+     * @private
+     */
+    saveState() {
+        if (this.gameEnd)
+            return;
+        localStorage.setItem("savedGame", JSON.stringify(this.captureState()));
+    }
+    /**
+     * Reprend un match interrompu à partir de sa sauvegarde
+     * @param {savedGame} saved
+     */
+    resume(saved) {
+        $("#startBtn").hide();
+        this.player1.restore(saved.p1);
+        this.player2.restore(saved.p2);
+        this.service = saved.serviceIs1 === null ? null : (saved.serviceIs1 ? this.player1 : this.player2);
+        this.lastPlayerWon = saved.lastWonIs1 === null ? null : (saved.lastWonIs1 ? this.player1 : this.player2);
+        this.numberPoint = saved.numberPoint;
+        this.timeStart = saved.timeStart;
+        this.timeSets = saved.timeSets;
+        this.timePoints = saved.timePoints;
+        this.gameEnd = saved.gameEnd;
+        this.numSets = saved.numSets;
+        this.currentSetPoints = saved.setPoints.slice();
+        this.logsSets = saved.logsSets.slice();
+        this.logsGames = saved.logsGames.slice();
+        this.logMatch = saved.logMatch;
+        // Le innerHTML rétablit l'affichage exact (colonnes, frise, noms, service)
+        $("#ligne-j1").html(saved.ligneJ1);
+        $("#ligne-j2").html(saved.ligneJ2);
+        $(".grid-all-points").html(saved.grid);
+        $("#info_txt").html(saved.info);
+        $("#totalTime").text(formatTime(this.timeStart));
+        $("#setsTime").text(formatTime(this.timeSets));
+        $("#pointTime").text(formatTime(this.timePoints));
+        // L'historique d'annulation n'est pas conservé entre deux sessions
+        this.history = [];
+        this.updateUndoButtons();
+        this.inGame = true;
+        this.startTimer();
+        this.ensureTimersRunning();
+        requestWakeLock();
     }
 }
 /**
