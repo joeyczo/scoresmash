@@ -55,6 +55,29 @@ body .score
 {
     display: flex;
     align-items: center;
+    position: relative;
+}
+.score .ligne-score .undo
+{
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translate(calc(-100% - 6px), -50%);
+    background: #053C2C;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    width: 7vw;
+    height: 7vh;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.score .ligne-score .undo:disabled
+{
+    opacity: 0.3;
+    cursor: default;
 }
 .score .ligne-score .first
 {

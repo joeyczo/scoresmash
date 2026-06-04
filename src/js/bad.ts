@@ -49,6 +49,34 @@ interface dataLogSet {
     time : number
 }
 
+/** Instantané d'un joueur pour pouvoir annuler un point */
+interface playerSnapshot {
+    score  : number,
+    sets   : number,
+    points : number,
+    serve  : boolean
+}
+
+/** Instantané complet de l'état du jeu avant un point (pour l'annulation) */
+interface gameSnapshot {
+    p1         : playerSnapshot,
+    p2         : playerSnapshot,
+    scorerIs1  : boolean,        // Joueur qui a marqué le point que cet instantané précède
+    serviceIs1 : boolean | null, // Joueur au service
+    lastWonIs1 : boolean | null, // Dernier joueur à avoir marqué
+    numberPoint: number,
+    timeSets   : number,
+    timePoints : number,
+    numSets    : number,
+    gameEnd    : boolean,
+    logsSets   : dataLogSet[],
+    logsGames  : dataLogJeu[],
+    ligneJ1    : string,         // innerHTML des lignes de score / frise / info
+    ligneJ2    : string,
+    grid       : string,
+    info       : string
+}
+
 
 /********* METHODES *********/
 
@@ -125,6 +153,14 @@ let clickScore = ( player : number ) : void => {
     if (game === undefined) return;
 
     game.newPoint( player );
+
+}
+
+let clickUndo = ( player : number ) : void => {
+
+    if (game === undefined) return;
+
+    game.undoLastPoint( player );
 
 }
 
@@ -207,6 +243,13 @@ class Badminton {
     /** Nombre de sets */
     private numSets : number;
 
+    /** Pile des instantanés (un par point) pour l'annulation */
+    private history : gameSnapshot[];
+    /** Compteur de génération pour invalider les séquences async en cours lors d'une annulation */
+    private actionGen : number;
+    /** Interval du décompte de pause/échauffement en cours (pour pouvoir le couper) */
+    private pauseInterval : any;
+
 
     constructor ( gameInfos : dataSendInfoStart) {
 
@@ -240,6 +283,10 @@ class Badminton {
             gamesList   : []
         }
         this.numSets = 0;
+
+        this.history = [];
+        this.actionGen = 0;
+        this.pauseInterval = null;
 
         $("button.go").show();
 
@@ -492,11 +539,13 @@ class Badminton {
 
         this.inGame = false;
 
+        let gen = this.actionGen;
+
         if (time === undefined) time = 5;
 
         this.setInfoTxt("Pause de " + time + " secondes");
 
-        let inT = setInterval(() => {
+        this.pauseInterval = setInterval(() => {
 
             // @ts-ignore
             time--;
@@ -507,9 +556,14 @@ class Badminton {
 
         await sleep(time * 1000);
 
-        this.talk("Fin de la pause");
+        if (this.pauseInterval !== null) {
+            clearInterval(this.pauseInterval);
+            this.pauseInterval = null;
+        }
 
-        clearInterval(inT);
+        if (gen !== this.actionGen) return;
+
+        this.talk("Fin de la pause");
 
     }
 
@@ -522,6 +576,8 @@ class Badminton {
 
         this.inGame = false;
 
+        let gen = this.actionGen;
+
         let time : number = !dev ? (this.gameInfos.training ? this.gameInfos.timeTrain : 0) : 2;
 
         if (time > 0) {
@@ -529,7 +585,7 @@ class Badminton {
             this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
         }
 
-        let inT = setInterval(() => {
+        this.pauseInterval = setInterval(() => {
 
             // @ts-ignore
             time--;
@@ -539,11 +595,16 @@ class Badminton {
 
         await sleep(time * 1000);
 
+        if (this.pauseInterval !== null) {
+            clearInterval(this.pauseInterval);
+            this.pauseInterval = null;
+        }
+
+        if (gen !== this.actionGen) return;
+
         this.playSong();
 
         this.talk("Début du point")
-
-        clearInterval(inT);
 
     }
 
@@ -664,6 +725,7 @@ class Badminton {
 
         }
 
+        let gen = this.actionGen;
 
         let p1 : number = this.player1.getSet();
         let p2 : number = this.player2.getSet();
@@ -715,8 +777,12 @@ class Badminton {
 
                 await sleep(2000);
 
+                if (gen !== this.actionGen) return;
+
                 this.gameEnd = true;
                 this.inGame = false;
+
+                this.updateUndoButtons();
 
                 this.printPDFMatch();
 
@@ -746,6 +812,8 @@ class Badminton {
 
                 await sleep(2000);
 
+                if (gen !== this.actionGen) return;
+
                 this.player1.resetSets();
                 this.player2.resetSets();
 
@@ -753,6 +821,8 @@ class Badminton {
                 this.player2.resetPoint();
 
                 await this.break(!dev ? this.gameInfos.pauseGame : 3);
+
+                if (gen !== this.actionGen) return;
 
                 this.playSong();
 
@@ -763,7 +833,11 @@ class Badminton {
 
                 await sleep(2000);
 
+                if (gen !== this.actionGen) return;
+
                 await this.train();
+
+                if (gen !== this.actionGen) return;
 
                 this.newSet(true);
 
@@ -787,6 +861,8 @@ class Badminton {
 
             await this.break(!dev ? this.gameInfos.pauseSet : 2);
 
+            if (gen !== this.actionGen) return;
+
             this.playSong();
 
             this.setInfoTxt("Début du set " + this.numSets);
@@ -794,10 +870,14 @@ class Badminton {
 
             await sleep(2000);
 
+            if (gen !== this.actionGen) return;
+
             this.timeSets   = 0;
             this.timePoints = 0;
 
             await this.train();
+
+            if (gen !== this.actionGen) return;
 
             this.setInfoTxt("Début");
             if (this.service !== null) this.talk(this.service.getNomJoueur() + " sert");
@@ -820,6 +900,11 @@ class Badminton {
     public async newPoint( player : number ) : Promise<void> {
 
         if (!this.inGame) return;
+
+        // Instantané de l'état avant le point + activation de l'annulation pour ce marqueur
+        this.pushSnapshot( player );
+        let gen = ++this.actionGen;
+        this.updateUndoButtons();
 
         let playerN     : BadmintonPlayer = (player === 1 ? this.player1 : this.player2);
         let otherPlayer : BadmintonPlayer = (player === 1 ? this.player2 : this.player1);
@@ -902,6 +987,8 @@ class Badminton {
             $(".gam-p2 p").text(scoreP2);
 
             await sleep(2000);
+
+            if (gen !== this.actionGen) return;
 
             let txtBalle = "set";
             if (this.balleDeJeu  (playerN, otherPlayer)) txtBalle = "jeu"  ;
@@ -1091,6 +1178,156 @@ class Badminton {
 
     }
 
+    /**
+     * Empile un instantané de l'état complet du jeu avant un point
+     * @param {number} player Joueur qui s'apprête à marquer
+     * @private
+     */
+    private pushSnapshot ( player : number ) : void {
+
+        let snap : gameSnapshot = {
+            p1          : this.player1.snapshot(),
+            p2          : this.player2.snapshot(),
+            scorerIs1   : player === 1,
+            serviceIs1  : this.service === null ? null : this.service === this.player1,
+            lastWonIs1  : this.lastPlayerWon === null ? null : this.lastPlayerWon === this.player1,
+            numberPoint : this.numberPoint,
+            timeSets    : this.timeSets,
+            timePoints  : this.timePoints,
+            numSets     : this.numSets,
+            gameEnd     : this.gameEnd,
+            logsSets    : this.logsSets.slice(),
+            logsGames   : this.logsGames.slice(),
+            ligneJ1     : $("#ligne-j1").html(),
+            ligneJ2     : $("#ligne-j2").html(),
+            grid        : $(".grid-all-points").html(),
+            info        : $("#info_txt").html()
+        }
+
+        this.history.push(snap);
+
+    }
+
+    /**
+     * Restaure l'état du jeu à partir d'un instantané
+     * @param {gameSnapshot} snap
+     * @private
+     */
+    private restoreSnapshot ( snap : gameSnapshot ) : void {
+
+        this.player1.restore(snap.p1);
+        this.player2.restore(snap.p2);
+
+        this.service       = snap.serviceIs1 === null ? null : (snap.serviceIs1 ? this.player1 : this.player2);
+        this.lastPlayerWon = snap.lastWonIs1 === null ? null : (snap.lastWonIs1 ? this.player1 : this.player2);
+        this.numberPoint   = snap.numberPoint;
+        this.timeSets      = snap.timeSets;
+        this.timePoints    = snap.timePoints;
+        this.numSets       = snap.numSets;
+        this.gameEnd       = snap.gameEnd;
+        this.logsSets      = snap.logsSets.slice();
+        this.logsGames     = snap.logsGames.slice();
+
+        // Le innerHTML rétablit l'affichage exact (colonnes, frise, icône de service)
+        $("#ligne-j1").html(snap.ligneJ1);
+        $("#ligne-j2").html(snap.ligneJ2);
+        $(".grid-all-points").html(snap.grid);
+        $("#info_txt").html(snap.info);
+
+        $("#setsTime").text( formatTime(this.timeSets) );
+        $("#pointTime").text( formatTime(this.timePoints) );
+
+    }
+
+    /**
+     * Annule le dernier point. N'a d'effet que si le joueur visé est bien le dernier marqueur.
+     * @param {number} player Numéro du joueur dont on veut retirer le point
+     */
+    public undoLastPoint ( player : number ) : void {
+
+        if (this.gameEnd) return;
+        if (this.history.length === 0) return;
+
+        let snap : gameSnapshot = this.history[this.history.length - 1];
+
+        // On ne peut retirer que le point du dernier marqueur
+        if (snap.scorerIs1 !== (player === 1)) return;
+
+        let scorer : BadmintonPlayer = snap.scorerIs1 ? this.player1 : this.player2;
+
+        if (!confirm("Retirer le dernier point de " + scorer.getNomJoueur() + " ?")) return;
+
+        this.history.pop();
+
+        // Invalide les séquences async en cours et coupe le décompte/la voix
+        this.actionGen++;
+        this.abortPending();
+
+        this.restoreSnapshot(snap);
+
+        this.inGame = true;
+        this.ensureTimersRunning();
+
+        // Après restauration, getPoint() vaut le score d'avant le point retiré
+        this.talk("Un point a été retiré à " + scorer.getNomJoueur() + ", le nouveau score est " + scorer.getPoint());
+
+        this.updateUndoButtons();
+
+    }
+
+    /**
+     * Coupe le décompte de pause en cours et vide la file vocale en attente
+     * @private
+     */
+    private abortPending () : void {
+
+        if (this.pauseInterval !== null) {
+            clearInterval(this.pauseInterval);
+            this.pauseInterval = null;
+        }
+
+        if (!dev && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+
+    }
+
+    /**
+     * Relance les chronos de set et de point s'ils ont été arrêtés par une transition annulée
+     * @private
+     */
+    private ensureTimersRunning () : void {
+
+        if (this.chronoSet === null) {
+            this.chronoSet = setInterval(() => {
+                this.timeSets++;
+                $("#setsTime").text( formatTime(this.timeSets) );
+            }, 1000);
+        }
+
+        if (this.chronoPoint === null) {
+            this.chronoPoint = setInterval(() => {
+                this.timePoints++;
+                $("#pointTime").text( formatTime(this.timePoints) );
+            }, 1000);
+        }
+
+    }
+
+    /**
+     * Active le bouton d'annulation du dernier marqueur uniquement, désactive l'autre
+     * @private
+     */
+    private updateUndoButtons () : void {
+
+        let last : gameSnapshot | null = this.history.length > 0 ? this.history[this.history.length - 1] : null;
+
+        let en1 : boolean = !this.gameEnd && last !== null && last.scorerIs1;
+        let en2 : boolean = !this.gameEnd && last !== null && !last.scorerIs1;
+
+        $("#undo-j1").prop("disabled", !en1);
+        $("#undo-j2").prop("disabled", !en2);
+
+    }
+
 }
 
 /**
@@ -1213,6 +1450,25 @@ class BadmintonPlayer {
     /** Permet de réinitialiser les sets du joueur */
     public resetSets() : void {
         this.sets = 0;
+    }
+
+    /**
+     * Instantané des compteurs du joueur (pour l'annulation d'un point)
+     * @return {playerSnapshot}
+     */
+    public snapshot() : playerSnapshot {
+        return { score: this.score, sets: this.sets, points: this.points, serve: this.serve };
+    }
+
+    /**
+     * Restaure les compteurs du joueur à partir d'un instantané
+     * @param {playerSnapshot} s
+     */
+    public restore( s : playerSnapshot ) : void {
+        this.score  = s.score;
+        this.sets   = s.sets;
+        this.points = s.points;
+        this.serve  = s.serve;
     }
 
 }

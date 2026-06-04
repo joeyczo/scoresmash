@@ -76,6 +76,11 @@ let clickScore = (player) => {
         return;
     game.newPoint(player);
 };
+let clickUndo = (player) => {
+    if (game === undefined)
+        return;
+    game.undoLastPoint(player);
+};
 let startMatch = () => {
     game.start();
     $("button.go").hide();
@@ -131,6 +136,9 @@ class Badminton {
             gamesList: []
         };
         this.numSets = 0;
+        this.history = [];
+        this.actionGen = 0;
+        this.pauseInterval = null;
         $("button.go").show();
     }
     /**
@@ -364,18 +372,24 @@ class Badminton {
     break(time) {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
+            let gen = this.actionGen;
             if (time === undefined)
                 time = 5;
             this.setInfoTxt("Pause de " + time + " secondes");
-            let inT = setInterval(() => {
+            this.pauseInterval = setInterval(() => {
                 // @ts-ignore
                 time--;
                 // @ts-ignore
                 this.setInfoTxt("Pause de " + time + " seconde" + (time > 1 ? "s" : ""));
             }, 1000);
             yield sleep(time * 1000);
+            if (this.pauseInterval !== null) {
+                clearInterval(this.pauseInterval);
+                this.pauseInterval = null;
+            }
+            if (gen !== this.actionGen)
+                return;
             this.talk("Fin de la pause");
-            clearInterval(inT);
         });
     }
     /**
@@ -386,20 +400,26 @@ class Badminton {
     train() {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
+            let gen = this.actionGen;
             let time = !dev ? (this.gameInfos.training ? this.gameInfos.timeTrain : 0) : 2;
             if (time > 0) {
                 this.talk("Échauffement de " + time + " secondes");
                 this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
             }
-            let inT = setInterval(() => {
+            this.pauseInterval = setInterval(() => {
                 // @ts-ignore
                 time--;
                 this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " seconde" + (time > 1 ? "s" : ""));
             }, 1000);
             yield sleep(time * 1000);
+            if (this.pauseInterval !== null) {
+                clearInterval(this.pauseInterval);
+                this.pauseInterval = null;
+            }
+            if (gen !== this.actionGen)
+                return;
             this.playSong();
             this.talk("Début du point");
-            clearInterval(inT);
         });
     }
     /**
@@ -489,6 +509,7 @@ class Badminton {
                 this.inGame = true;
                 return;
             }
+            let gen = this.actionGen;
             let p1 = this.player1.getSet();
             let p2 = this.player2.getSet();
             if ((p1 >= this.gameInfos.set && Math.abs(p1 - p2) >= 2) || (p2 >= this.gameInfos.set && Math.abs(p2 - p1) >= 2)) {
@@ -521,8 +542,11 @@ class Badminton {
                     $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
                     $(".set-p" + lose).removeClass("set-p" + lose).addClass("s-lose");
                     yield sleep(2000);
+                    if (gen !== this.actionGen)
+                        return;
                     this.gameEnd = true;
                     this.inGame = false;
+                    this.updateUndoButtons();
                     this.printPDFMatch();
                     return;
                 }
@@ -542,17 +566,25 @@ class Badminton {
                     $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
                     $(".set-p" + lose).removeClass("set-p" + lose).addClass("s-lose");
                     yield sleep(2000);
+                    if (gen !== this.actionGen)
+                        return;
                     this.player1.resetSets();
                     this.player2.resetSets();
                     this.player1.resetPoint();
                     this.player2.resetPoint();
                     yield this.break(!dev ? this.gameInfos.pauseGame : 3);
+                    if (gen !== this.actionGen)
+                        return;
                     this.playSong();
                     this.setInfoTxt("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
                     this.talk("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
                     this.talk(((_a = this.service) === null || _a === void 0 ? void 0 : _a.getNomJoueur()) + " sert");
                     yield sleep(2000);
+                    if (gen !== this.actionGen)
+                        return;
                     yield this.train();
+                    if (gen !== this.actionGen)
+                        return;
                     this.newSet(true);
                 }
             }
@@ -566,13 +598,19 @@ class Badminton {
                 $(".gam-p1 p").text("0");
                 $(".gam-p2 p").text("0");
                 yield this.break(!dev ? this.gameInfos.pauseSet : 2);
+                if (gen !== this.actionGen)
+                    return;
                 this.playSong();
                 this.setInfoTxt("Début du set " + this.numSets);
                 this.talk("Début du set " + this.numSets);
                 yield sleep(2000);
+                if (gen !== this.actionGen)
+                    return;
                 this.timeSets = 0;
                 this.timePoints = 0;
                 yield this.train();
+                if (gen !== this.actionGen)
+                    return;
                 this.setInfoTxt("Début");
                 if (this.service !== null)
                     this.talk(this.service.getNomJoueur() + " sert");
@@ -591,6 +629,10 @@ class Badminton {
             var _a;
             if (!this.inGame)
                 return;
+            // Instantané de l'état avant le point + activation de l'annulation pour ce marqueur
+            this.pushSnapshot(player);
+            let gen = ++this.actionGen;
+            this.updateUndoButtons();
             let playerN = (player === 1 ? this.player1 : this.player2);
             let otherPlayer = (player === 1 ? this.player2 : this.player1);
             if (playerN.getPoint() + 1 >= this.gameInfos.points && Math.abs(playerN.getPoint() + 1 - otherPlayer.getPoint()) >= 2) {
@@ -651,6 +693,8 @@ class Badminton {
                 $(".gam-p1 p").text(scoreP1);
                 $(".gam-p2 p").text(scoreP2);
                 yield sleep(2000);
+                if (gen !== this.actionGen)
+                    return;
                 let txtBalle = "set";
                 if (this.balleDeJeu(playerN, otherPlayer))
                     txtBalle = "jeu";
@@ -790,6 +834,125 @@ class Badminton {
         localStorage.setItem("dataMatch", JSON.stringify(dataToPrint === undefined ? this.logMatch : dataToPrint));
         window.open('/pdfBad', '_blank');
     }
+    /**
+     * Empile un instantané de l'état complet du jeu avant un point
+     * @param {number} player Joueur qui s'apprête à marquer
+     * @private
+     */
+    pushSnapshot(player) {
+        let snap = {
+            p1: this.player1.snapshot(),
+            p2: this.player2.snapshot(),
+            scorerIs1: player === 1,
+            serviceIs1: this.service === null ? null : this.service === this.player1,
+            lastWonIs1: this.lastPlayerWon === null ? null : this.lastPlayerWon === this.player1,
+            numberPoint: this.numberPoint,
+            timeSets: this.timeSets,
+            timePoints: this.timePoints,
+            numSets: this.numSets,
+            gameEnd: this.gameEnd,
+            logsSets: this.logsSets.slice(),
+            logsGames: this.logsGames.slice(),
+            ligneJ1: $("#ligne-j1").html(),
+            ligneJ2: $("#ligne-j2").html(),
+            grid: $(".grid-all-points").html(),
+            info: $("#info_txt").html()
+        };
+        this.history.push(snap);
+    }
+    /**
+     * Restaure l'état du jeu à partir d'un instantané
+     * @param {gameSnapshot} snap
+     * @private
+     */
+    restoreSnapshot(snap) {
+        this.player1.restore(snap.p1);
+        this.player2.restore(snap.p2);
+        this.service = snap.serviceIs1 === null ? null : (snap.serviceIs1 ? this.player1 : this.player2);
+        this.lastPlayerWon = snap.lastWonIs1 === null ? null : (snap.lastWonIs1 ? this.player1 : this.player2);
+        this.numberPoint = snap.numberPoint;
+        this.timeSets = snap.timeSets;
+        this.timePoints = snap.timePoints;
+        this.numSets = snap.numSets;
+        this.gameEnd = snap.gameEnd;
+        this.logsSets = snap.logsSets.slice();
+        this.logsGames = snap.logsGames.slice();
+        // Le innerHTML rétablit l'affichage exact (colonnes, frise, icône de service)
+        $("#ligne-j1").html(snap.ligneJ1);
+        $("#ligne-j2").html(snap.ligneJ2);
+        $(".grid-all-points").html(snap.grid);
+        $("#info_txt").html(snap.info);
+        $("#setsTime").text(formatTime(this.timeSets));
+        $("#pointTime").text(formatTime(this.timePoints));
+    }
+    /**
+     * Annule le dernier point. N'a d'effet que si le joueur visé est bien le dernier marqueur.
+     * @param {number} player Numéro du joueur dont on veut retirer le point
+     */
+    undoLastPoint(player) {
+        if (this.gameEnd)
+            return;
+        if (this.history.length === 0)
+            return;
+        let snap = this.history[this.history.length - 1];
+        // On ne peut retirer que le point du dernier marqueur
+        if (snap.scorerIs1 !== (player === 1))
+            return;
+        let scorer = snap.scorerIs1 ? this.player1 : this.player2;
+        if (!confirm("Retirer le dernier point de " + scorer.getNomJoueur() + " ?"))
+            return;
+        this.history.pop();
+        // Invalide les séquences async en cours et coupe le décompte/la voix
+        this.actionGen++;
+        this.abortPending();
+        this.restoreSnapshot(snap);
+        this.inGame = true;
+        this.ensureTimersRunning();
+        // Après restauration, getPoint() vaut le score d'avant le point retiré
+        this.talk("Un point a été retiré à " + scorer.getNomJoueur() + ", le nouveau score est " + scorer.getPoint());
+        this.updateUndoButtons();
+    }
+    /**
+     * Coupe le décompte de pause en cours et vide la file vocale en attente
+     * @private
+     */
+    abortPending() {
+        if (this.pauseInterval !== null) {
+            clearInterval(this.pauseInterval);
+            this.pauseInterval = null;
+        }
+        if (!dev && 'speechSynthesis' in window)
+            window.speechSynthesis.cancel();
+    }
+    /**
+     * Relance les chronos de set et de point s'ils ont été arrêtés par une transition annulée
+     * @private
+     */
+    ensureTimersRunning() {
+        if (this.chronoSet === null) {
+            this.chronoSet = setInterval(() => {
+                this.timeSets++;
+                $("#setsTime").text(formatTime(this.timeSets));
+            }, 1000);
+        }
+        if (this.chronoPoint === null) {
+            this.chronoPoint = setInterval(() => {
+                this.timePoints++;
+                $("#pointTime").text(formatTime(this.timePoints));
+            }, 1000);
+        }
+    }
+    /**
+     * Active le bouton d'annulation du dernier marqueur uniquement, désactive l'autre
+     * @private
+     */
+    updateUndoButtons() {
+        let last = this.history.length > 0 ? this.history[this.history.length - 1] : null;
+        let en1 = !this.gameEnd && last !== null && last.scorerIs1;
+        let en2 = !this.gameEnd && last !== null && !last.scorerIs1;
+        $("#undo-j1").prop("disabled", !en1);
+        $("#undo-j2").prop("disabled", !en2);
+    }
 }
 /**
  * Classe permettant de gérer les joueurs du jeu de badminton
@@ -872,6 +1035,23 @@ class BadmintonPlayer {
     /** Permet de réinitialiser les sets du joueur */
     resetSets() {
         this.sets = 0;
+    }
+    /**
+     * Instantané des compteurs du joueur (pour l'annulation d'un point)
+     * @return {playerSnapshot}
+     */
+    snapshot() {
+        return { score: this.score, sets: this.sets, points: this.points, serve: this.serve };
+    }
+    /**
+     * Restaure les compteurs du joueur à partir d'un instantané
+     * @param {playerSnapshot} s
+     */
+    restore(s) {
+        this.score = s.score;
+        this.sets = s.sets;
+        this.points = s.points;
+        this.serve = s.serve;
     }
 }
 /********* EVENTS *********/
