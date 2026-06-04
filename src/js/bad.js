@@ -28,6 +28,12 @@ var clickBtn = () => {
         let sets = $("#nbSets").val();
         let set = $("#nbJSets").val();
         let points = $("#nbPoints").val();
+        // Paramètres avancés (accordéon)
+        let training = $("#training").is(":checked");
+        let timeTrain = Number($("#timeTrain").val());
+        let pauseStart = Number($("#pauseStart").val());
+        let pauseSet = Number($("#pauseSet").val());
+        let pauseGame = Number($("#pauseGame").val());
         // Objet de partie
         let obj = {
             player1: (player1.length > 0 ? player1 : "Joueur 1"),
@@ -35,8 +41,15 @@ var clickBtn = () => {
             sets: (sets > 0 ? sets : 2),
             set: (set > 0 ? set : 6),
             points: (points > 0 ? points : 20),
+            training: training,
+            timeTrain: (timeTrain >= 0 ? timeTrain : 40),
+            pauseStart: (pauseStart >= 0 ? pauseStart : 30),
+            pauseSet: (pauseSet >= 0 ? pauseSet : 45),
+            pauseGame: (pauseGame >= 0 ? pauseGame : 60),
             start: new Date()
         };
+        // Nouveau match : on oublie toute partie en cours
+        localStorage.removeItem("savedGame");
         // Envoi des informations
         sessionStorage.setItem("dataGame", JSON.stringify(obj));
         // Changement de page
@@ -45,17 +58,29 @@ var clickBtn = () => {
 };
 /** JEU */
 let game;
-// @ts-ignore
-const socket = io({
-    reconnection: true, // Activer la reconnexion automatique
-    reconnectionAttempts: 10, // Nombre de tentatives de reconnexion
-    reconnectionDelay: 1000, // Délai entre les tentatives de reconnexion (en ms)
-    reconnectionDelayMax: 5000, // Délai maximum entre les tentatives de reconnexion (en ms)
-});
-let startGame = (socketR) => {
+let startGame = () => {
+    // Reprise d'un match interrompu (rechargement, onglet vidé par le mobile, ...)
+    let saved = localStorage.getItem("savedGame");
+    if (saved !== null) {
+        let savedObj = JSON.parse(saved);
+        if (confirm("Un match est en cours. Voulez-vous le reprendre ?")) {
+            game = new Badminton(savedObj.gameInfos);
+            game.resume(savedObj);
+            return;
+        }
+        // On exige une seconde confirmation avant d'écraser un match en cours
+        if (!confirm("Démarrer un nouveau match ? Le match en cours sera perdu.")) {
+            game = new Badminton(savedObj.gameInfos);
+            game.resume(savedObj);
+            return;
+        }
+        localStorage.removeItem("savedGame");
+    }
     let dataGame = sessionStorage.getItem("dataGame");
-    if (dataGame === null)
+    if (dataGame === null) {
         window.location.href = '/';
+        return;
+    }
     let obj = JSON.parse(dataGame);
     game = new Badminton(obj);
 };
@@ -72,9 +97,43 @@ let clickScore = (player) => {
         return;
     game.newPoint(player);
 };
+let clickUndo = (player) => {
+    if (game === undefined)
+        return;
+    game.undoLastPoint(player);
+};
+let downloadPDF = () => {
+    window.open('/pdfBad', '_blank');
+};
+/** Verrou empêchant la mise en veille de l'écran pendant un match */
+let wakeLock = null;
+/** Indique si l'on souhaite garder l'écran allumé (pour ré-acquérir le verrou) */
+let wantWakeLock = false;
+let requestWakeLock = () => __awaiter(void 0, void 0, void 0, function* () {
+    wantWakeLock = true;
+    try {
+        let nav = navigator;
+        if ('wakeLock' in nav)
+            wakeLock = yield nav.wakeLock.request('screen');
+    }
+    catch (e) { /* Non supporté ou refusé : on ignore */ }
+});
+let releaseWakeLock = () => {
+    wantWakeLock = false;
+    if (wakeLock !== null) {
+        wakeLock.release();
+        wakeLock = null;
+    }
+};
+// Le verrou est libéré quand l'onglet est masqué : on le ré-acquiert au retour
+document.addEventListener('visibilitychange', () => {
+    if (wantWakeLock && document.visibilityState === 'visible')
+        requestWakeLock();
+});
 let startMatch = () => {
     game.start();
     $("button.go").hide();
+    requestWakeLock();
 };
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -120,17 +179,23 @@ class Badminton {
         this.roomId = !dev ? randomUID(5) : "dev";
         this.logsGames = [];
         this.logsSets = [];
+        this.currentSetPoints = [];
         this.logMatch = {
             winner: "",
+            player1Name: gameInfos.player1,
+            player2Name: gameInfos.player2,
+            pointsPerSet: Number(gameInfos.points),
+            setsPerGame: Number(gameInfos.set),
+            gamesToWin: Number(gameInfos.sets),
             time: 0,
             numberSet: 0,
             gamesList: []
         };
         this.numSets = 0;
-        socket.emit('createRoom', { roomId: this.roomId });
-        socket.emit('testSocketRoom', { roomId: this.roomId });
-        this.setInfoTxt("Code d'accès : " + this.roomId);
-        this.initSocket();
+        this.history = [];
+        this.actionGen = 0;
+        this.pauseInterval = null;
+        $("#startBtn").show();
     }
     /**
      * Démarrer le jeu
@@ -139,194 +204,6 @@ class Badminton {
     start() {
         return __awaiter(this, void 0, void 0, function* () {
             console.log("Démarrage du jeu");
-            let dataFinMatch = {
-                winner: "Joey",
-                time: 1541,
-                numberSet: 21,
-                gamesList: [
-                    {
-                        player1: 1,
-                        player2: 0,
-                        time: 120,
-                        setsList: [
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 17,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 14,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 7,
-                                j2: 20,
-                                time: 245
-                            },
-                            {
-                                j1: 20,
-                                j2: 4,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 197
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 10,
-                                j2: 20,
-                                time: 128
-                            },
-                            {
-                                j1: 24,
-                                j2: 26,
-                                time: 60
-                            },
-                            {
-                                j1: 20,
-                                j2: 12,
-                                time: 148
-                            },
-                            {
-                                j1: 26,
-                                j2: 24,
-                                time: 60
-                            }
-                        ]
-                    },
-                    {
-                        player1: 1,
-                        player2: 1,
-                        time: 245,
-                        setsList: [
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 17,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 14,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 7,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 20,
-                                j2: 4,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 10,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 24,
-                                j2: 26,
-                                time: 60
-                            }
-                        ]
-                    },
-                    {
-                        player1: 2,
-                        player2: 1,
-                        time: 245,
-                        setsList: [
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 17,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 14,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 7,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 20,
-                                j2: 4,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 21,
-                                j2: 19,
-                                time: 60
-                            },
-                            {
-                                j1: 10,
-                                j2: 20,
-                                time: 60
-                            },
-                            {
-                                j1: 24,
-                                j2: 26,
-                                time: 60
-                            }
-                        ]
-                    }
-                ]
-            };
             // Affichage des informations
             $("#joueur1 p").text(this.player1.getNomJoueur());
             $("#joueur2 p").text(this.player2.getNomJoueur());
@@ -341,7 +218,7 @@ class Badminton {
             this.toggleService();
             yield sleep(2000);
             // Temporisation pour le début de la partie
-            yield this.break(!dev ? 30 : 2);
+            yield this.break(!dev ? this.gameInfos.pauseStart : 2);
             this.playSong();
             // Debut du jeu avec entrainement
             yield this.train();
@@ -353,10 +230,6 @@ class Badminton {
             this.newSet(true);
             this.startTimer();
             this.numSets++;
-            setInterval(() => {
-                this.talk("Mise en veille de l'écran");
-                alert('Mise en veille de l\'écran');
-            }, 6 * 60000);
         });
     }
     /**
@@ -367,18 +240,24 @@ class Badminton {
     break(time) {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
+            let gen = this.actionGen;
             if (time === undefined)
                 time = 5;
             this.setInfoTxt("Pause de " + time + " secondes");
-            let inT = setInterval(() => {
+            this.pauseInterval = setInterval(() => {
                 // @ts-ignore
                 time--;
                 // @ts-ignore
                 this.setInfoTxt("Pause de " + time + " seconde" + (time > 1 ? "s" : ""));
             }, 1000);
             yield sleep(time * 1000);
+            if (this.pauseInterval !== null) {
+                clearInterval(this.pauseInterval);
+                this.pauseInterval = null;
+            }
+            if (gen !== this.actionGen)
+                return;
             this.talk("Fin de la pause");
-            clearInterval(inT);
         });
     }
     /**
@@ -389,18 +268,26 @@ class Badminton {
     train() {
         return __awaiter(this, void 0, void 0, function* () {
             this.inGame = false;
-            this.talk("Échauffement de 40 secondes");
-            let time = !dev ? 40 : 2;
-            this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
-            let inT = setInterval(() => {
+            let gen = this.actionGen;
+            let time = !dev ? (this.gameInfos.training ? this.gameInfos.timeTrain : 0) : 2;
+            if (time > 0) {
+                this.talk("Échauffement de " + time + " secondes");
+                this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " secondes");
+            }
+            this.pauseInterval = setInterval(() => {
                 // @ts-ignore
                 time--;
                 this.setInfoTxt("[ECHAUFFEMENT] Encore " + time + " seconde" + (time > 1 ? "s" : ""));
             }, 1000);
             yield sleep(time * 1000);
+            if (this.pauseInterval !== null) {
+                clearInterval(this.pauseInterval);
+                this.pauseInterval = null;
+            }
+            if (gen !== this.actionGen)
+                return;
             this.playSong();
             this.talk("Début du point");
-            clearInterval(inT);
         });
     }
     /**
@@ -454,6 +341,7 @@ class Badminton {
      */
     newSet() {
         return __awaiter(this, arguments, void 0, function* (init = false) {
+            var _a;
             // Initialiser un nouveau set lors d'un nouveau jeu
             if (init) {
                 this.timeSets = 0;
@@ -487,8 +375,10 @@ class Badminton {
                 $("#ligne-j2").append(htmlPla2);
                 this.toggleTimerPoint();
                 this.inGame = true;
+                this.saveState();
                 return;
             }
+            let gen = this.actionGen;
             let p1 = this.player1.getSet();
             let p2 = this.player2.getSet();
             if ((p1 >= this.gameInfos.set && Math.abs(p1 - p2) >= 2) || (p2 >= this.gameInfos.set && Math.abs(p2 - p1) >= 2)) {
@@ -521,8 +411,14 @@ class Badminton {
                     $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
                     $(".set-p" + lose).removeClass("set-p" + lose).addClass("s-lose");
                     yield sleep(2000);
+                    if (gen !== this.actionGen)
+                        return;
                     this.gameEnd = true;
                     this.inGame = false;
+                    // Match terminé : plus rien à reprendre, on libère l'écran
+                    localStorage.removeItem("savedGame");
+                    releaseWakeLock();
+                    this.updateUndoButtons();
                     this.printPDFMatch();
                     return;
                 }
@@ -542,16 +438,25 @@ class Badminton {
                     $(".set-p" + win).removeClass("set-p" + win).addClass("s-win");
                     $(".set-p" + lose).removeClass("set-p" + lose).addClass("s-lose");
                     yield sleep(2000);
+                    if (gen !== this.actionGen)
+                        return;
                     this.player1.resetSets();
                     this.player2.resetSets();
                     this.player1.resetPoint();
                     this.player2.resetPoint();
-                    yield this.break(dev ? 3 : 60);
+                    yield this.break(!dev ? this.gameInfos.pauseGame : 3);
+                    if (gen !== this.actionGen)
+                        return;
                     this.playSong();
                     this.setInfoTxt("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
                     this.talk("Début du jeu " + (this.player2.getScore() + this.player1.getScore() + 1));
+                    this.talk(((_a = this.service) === null || _a === void 0 ? void 0 : _a.getNomJoueur()) + " sert");
                     yield sleep(2000);
+                    if (gen !== this.actionGen)
+                        return;
                     yield this.train();
+                    if (gen !== this.actionGen)
+                        return;
                     this.newSet(true);
                 }
             }
@@ -564,20 +469,27 @@ class Badminton {
                 this.player2.resetPoint();
                 $(".gam-p1 p").text("0");
                 $(".gam-p2 p").text("0");
-                yield this.break(!dev ? 45 : 2);
+                yield this.break(!dev ? this.gameInfos.pauseSet : 2);
+                if (gen !== this.actionGen)
+                    return;
                 this.playSong();
                 this.setInfoTxt("Début du set " + this.numSets);
                 this.talk("Début du set " + this.numSets);
                 yield sleep(2000);
+                if (gen !== this.actionGen)
+                    return;
                 this.timeSets = 0;
                 this.timePoints = 0;
                 yield this.train();
+                if (gen !== this.actionGen)
+                    return;
                 this.setInfoTxt("Début");
                 if (this.service !== null)
                     this.talk(this.service.getNomJoueur() + " sert");
                 this.toggleTimerSet();
                 this.toggleTimerPoint();
                 this.inGame = true;
+                this.saveState();
             }
         });
     }
@@ -590,19 +502,27 @@ class Badminton {
             var _a;
             if (!this.inGame)
                 return;
+            // Instantané de l'état avant le point + activation de l'annulation pour ce marqueur
+            this.pushSnapshot(player);
+            let gen = ++this.actionGen;
+            this.updateUndoButtons();
+            // Enregistrement de l'échange pour le déroulé du set
+            this.currentSetPoints.push(player);
             let playerN = (player === 1 ? this.player1 : this.player2);
             let otherPlayer = (player === 1 ? this.player2 : this.player1);
             if (playerN.getPoint() + 1 >= this.gameInfos.points && Math.abs(playerN.getPoint() + 1 - otherPlayer.getPoint()) >= 2) {
                 this.setInfoTxt("Fin du set pour " + playerN.getNomJoueur());
                 this.talk("Fin du set pour " + playerN.getNomJoueur());
-                playerN.addSet();
                 let logedSet = {
                     j1: this.player1.getPoint(),
                     j2: this.player2.getPoint(),
-                    time: this.timeSets
+                    time: this.timeSets,
+                    points: this.currentSetPoints.slice()
                 };
                 this.logsSets.push(logedSet);
+                this.currentSetPoints = [];
                 this.numSets++;
+                playerN.addSet();
                 $(".grid-all-points").html('');
                 let playerLead = (playerN.getSet() > otherPlayer.getSet() ? playerN : otherPlayer);
                 let playerLose = (playerN.getSet() > otherPlayer.getSet() ? otherPlayer : playerN);
@@ -650,6 +570,8 @@ class Badminton {
                 $(".gam-p1 p").text(scoreP1);
                 $(".gam-p2 p").text(scoreP2);
                 yield sleep(2000);
+                if (gen !== this.actionGen)
+                    return;
                 let txtBalle = "set";
                 if (this.balleDeJeu(playerN, otherPlayer))
                     txtBalle = "jeu";
@@ -667,6 +589,7 @@ class Badminton {
                 }
                 this.timePoints = 0;
                 this.inGame = true;
+                this.saveState();
             }
         });
     }
@@ -777,26 +700,6 @@ class Badminton {
         return this.balleDeJeu(playPoint, otherPlay) && p1 + 1 === this.gameInfos.sets;
     }
     /**
-     * Faire fonctionner les sockets
-     * @private
-     */
-    initSocket() {
-        console.log(this.roomId);
-        socket.on('confirmRoom', () => {
-            $("button.go").show();
-        });
-        socket.on('fetchPlayerName', () => {
-            let dataPlayer = {
-                player1: this.player1.getNomJoueur(),
-                player2: this.player2.getNomJoueur()
-            };
-            socket.emit('sendPlayersName', { roomId: this.roomId }, dataPlayer);
-        });
-        socket.on('addPoint', (player) => {
-            this.newPoint(player);
-        });
-    }
-    /**
      * Récupérer les informations du match à la fin du match
      * @return {dataLogMatch | null} Informations du match ou null si le match n'est pas terminé
      */
@@ -807,7 +710,203 @@ class Badminton {
     }
     printPDFMatch(dataToPrint) {
         localStorage.setItem("dataMatch", JSON.stringify(dataToPrint === undefined ? this.logMatch : dataToPrint));
-        window.open('/pdfBad', '_blank');
+        // Affichage du bouton de téléchargement (ouverture déclenchée par le clic, jamais bloquée)
+        $("#pdfBtn").show();
+    }
+    /**
+     * Empile un instantané de l'état complet du jeu avant un point
+     * @param {number} player Joueur qui s'apprête à marquer
+     * @private
+     */
+    pushSnapshot(player) {
+        let snap = {
+            p1: this.player1.snapshot(),
+            p2: this.player2.snapshot(),
+            scorerIs1: player === 1,
+            serviceIs1: this.service === null ? null : this.service === this.player1,
+            lastWonIs1: this.lastPlayerWon === null ? null : this.lastPlayerWon === this.player1,
+            numberPoint: this.numberPoint,
+            timeSets: this.timeSets,
+            timePoints: this.timePoints,
+            numSets: this.numSets,
+            gameEnd: this.gameEnd,
+            setPoints: this.currentSetPoints.slice(),
+            logsSets: this.logsSets.slice(),
+            logsGames: this.logsGames.slice(),
+            ligneJ1: $("#ligne-j1").html(),
+            ligneJ2: $("#ligne-j2").html(),
+            grid: $(".grid-all-points").html(),
+            info: $("#info_txt").html()
+        };
+        this.history.push(snap);
+    }
+    /**
+     * Restaure l'état du jeu à partir d'un instantané
+     * @param {gameSnapshot} snap
+     * @private
+     */
+    restoreSnapshot(snap) {
+        this.player1.restore(snap.p1);
+        this.player2.restore(snap.p2);
+        this.service = snap.serviceIs1 === null ? null : (snap.serviceIs1 ? this.player1 : this.player2);
+        this.lastPlayerWon = snap.lastWonIs1 === null ? null : (snap.lastWonIs1 ? this.player1 : this.player2);
+        this.numberPoint = snap.numberPoint;
+        this.timeSets = snap.timeSets;
+        this.timePoints = snap.timePoints;
+        this.numSets = snap.numSets;
+        this.gameEnd = snap.gameEnd;
+        this.currentSetPoints = snap.setPoints.slice();
+        this.logsSets = snap.logsSets.slice();
+        this.logsGames = snap.logsGames.slice();
+        // Le innerHTML rétablit l'affichage exact (colonnes, frise, icône de service)
+        $("#ligne-j1").html(snap.ligneJ1);
+        $("#ligne-j2").html(snap.ligneJ2);
+        $(".grid-all-points").html(snap.grid);
+        $("#info_txt").html(snap.info);
+        $("#setsTime").text(formatTime(this.timeSets));
+        $("#pointTime").text(formatTime(this.timePoints));
+    }
+    /**
+     * Annule le dernier point. N'a d'effet que si le joueur visé est bien le dernier marqueur.
+     * @param {number} player Numéro du joueur dont on veut retirer le point
+     */
+    undoLastPoint(player) {
+        if (this.gameEnd)
+            return;
+        if (this.history.length === 0)
+            return;
+        let snap = this.history[this.history.length - 1];
+        // On ne peut retirer que le point du dernier marqueur
+        if (snap.scorerIs1 !== (player === 1))
+            return;
+        let scorer = snap.scorerIs1 ? this.player1 : this.player2;
+        if (!confirm("Retirer le dernier point de " + scorer.getNomJoueur() + " ?"))
+            return;
+        this.history.pop();
+        // Invalide les séquences async en cours et coupe le décompte/la voix
+        this.actionGen++;
+        this.abortPending();
+        this.restoreSnapshot(snap);
+        this.inGame = true;
+        this.ensureTimersRunning();
+        // Après restauration, getPoint() vaut le score d'avant le point retiré
+        this.talk("Un point a été retiré à " + scorer.getNomJoueur() + ", le nouveau score est " + scorer.getPoint());
+        this.updateUndoButtons();
+        this.saveState();
+    }
+    /**
+     * Coupe le décompte de pause en cours et vide la file vocale en attente
+     * @private
+     */
+    abortPending() {
+        if (this.pauseInterval !== null) {
+            clearInterval(this.pauseInterval);
+            this.pauseInterval = null;
+        }
+        if (!dev && 'speechSynthesis' in window)
+            window.speechSynthesis.cancel();
+    }
+    /**
+     * Relance les chronos de set et de point s'ils ont été arrêtés par une transition annulée
+     * @private
+     */
+    ensureTimersRunning() {
+        if (this.chronoSet === null) {
+            this.chronoSet = setInterval(() => {
+                this.timeSets++;
+                $("#setsTime").text(formatTime(this.timeSets));
+            }, 1000);
+        }
+        if (this.chronoPoint === null) {
+            this.chronoPoint = setInterval(() => {
+                this.timePoints++;
+                $("#pointTime").text(formatTime(this.timePoints));
+            }, 1000);
+        }
+    }
+    /**
+     * Active le bouton d'annulation du dernier marqueur uniquement, désactive l'autre
+     * @private
+     */
+    updateUndoButtons() {
+        let last = this.history.length > 0 ? this.history[this.history.length - 1] : null;
+        let en1 = !this.gameEnd && last !== null && last.scorerIs1;
+        let en2 = !this.gameEnd && last !== null && !last.scorerIs1;
+        $("#undo-j1").prop("disabled", !en1);
+        $("#undo-j2").prop("disabled", !en2);
+    }
+    /**
+     * Capture l'état complet du match (logique + affichage) pour la reprise
+     * @return {savedGame}
+     * @private
+     */
+    captureState() {
+        return {
+            gameInfos: this.gameInfos,
+            p1: this.player1.snapshot(),
+            p2: this.player2.snapshot(),
+            serviceIs1: this.service === null ? null : this.service === this.player1,
+            lastWonIs1: this.lastPlayerWon === null ? null : this.lastPlayerWon === this.player1,
+            numberPoint: this.numberPoint,
+            timeStart: this.timeStart,
+            timeSets: this.timeSets,
+            timePoints: this.timePoints,
+            gameEnd: this.gameEnd,
+            numSets: this.numSets,
+            setPoints: this.currentSetPoints.slice(),
+            logsSets: this.logsSets.slice(),
+            logsGames: this.logsGames.slice(),
+            logMatch: this.logMatch,
+            ligneJ1: $("#ligne-j1").html(),
+            ligneJ2: $("#ligne-j2").html(),
+            grid: $(".grid-all-points").html(),
+            info: $("#info_txt").html()
+        };
+    }
+    /**
+     * Sauvegarde le match en cours dans le localStorage (survit au rechargement)
+     * @private
+     */
+    saveState() {
+        if (this.gameEnd)
+            return;
+        localStorage.setItem("savedGame", JSON.stringify(this.captureState()));
+    }
+    /**
+     * Reprend un match interrompu à partir de sa sauvegarde
+     * @param {savedGame} saved
+     */
+    resume(saved) {
+        $("#startBtn").hide();
+        this.player1.restore(saved.p1);
+        this.player2.restore(saved.p2);
+        this.service = saved.serviceIs1 === null ? null : (saved.serviceIs1 ? this.player1 : this.player2);
+        this.lastPlayerWon = saved.lastWonIs1 === null ? null : (saved.lastWonIs1 ? this.player1 : this.player2);
+        this.numberPoint = saved.numberPoint;
+        this.timeStart = saved.timeStart;
+        this.timeSets = saved.timeSets;
+        this.timePoints = saved.timePoints;
+        this.gameEnd = saved.gameEnd;
+        this.numSets = saved.numSets;
+        this.currentSetPoints = saved.setPoints.slice();
+        this.logsSets = saved.logsSets.slice();
+        this.logsGames = saved.logsGames.slice();
+        this.logMatch = saved.logMatch;
+        // Le innerHTML rétablit l'affichage exact (colonnes, frise, noms, service)
+        $("#ligne-j1").html(saved.ligneJ1);
+        $("#ligne-j2").html(saved.ligneJ2);
+        $(".grid-all-points").html(saved.grid);
+        $("#info_txt").html(saved.info);
+        $("#totalTime").text(formatTime(this.timeStart));
+        $("#setsTime").text(formatTime(this.timeSets));
+        $("#pointTime").text(formatTime(this.timePoints));
+        // L'historique d'annulation n'est pas conservé entre deux sessions
+        this.history = [];
+        this.updateUndoButtons();
+        this.inGame = true;
+        this.startTimer();
+        this.ensureTimersRunning();
+        requestWakeLock();
     }
 }
 /**
@@ -891,6 +990,23 @@ class BadmintonPlayer {
     /** Permet de réinitialiser les sets du joueur */
     resetSets() {
         this.sets = 0;
+    }
+    /**
+     * Instantané des compteurs du joueur (pour l'annulation d'un point)
+     * @return {playerSnapshot}
+     */
+    snapshot() {
+        return { score: this.score, sets: this.sets, points: this.points, serve: this.serve };
+    }
+    /**
+     * Restaure les compteurs du joueur à partir d'un instantané
+     * @param {playerSnapshot} s
+     */
+    restore(s) {
+        this.score = s.score;
+        this.sets = s.sets;
+        this.points = s.points;
+        this.serve = s.serve;
     }
 }
 /********* EVENTS *********/

@@ -13,7 +13,6 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Score Smash | Début</title>
     <link rel="stylesheet" href="../css/style.css">
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="../js/bad.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 </head>
@@ -58,6 +57,52 @@
     <input type="number" step="1" min="1" max="50" name="nbJSets" id="nbJSets" placeholder="Nombre de points sets pour remporter le jeu" value="6">
 
 </div>
+
+<details class="more-params">
+
+    <summary>Plus de paramètres</summary>
+
+    <div class="row-infos check-infos">
+
+        <label for="training">Échauffement</label>
+
+        <input type="checkbox" name="training" id="training" checked>
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="timeTrain">Temps d'échauffement (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="timeTrain" id="timeTrain" value="40">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="pauseStart">Pause début de match (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="pauseStart" id="pauseStart" value="30">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="pauseSet">Pause entre les sets (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="pauseSet" id="pauseSet" value="45">
+
+    </div>
+
+    <div class="row-infos">
+
+        <label for="pauseGame">Pause entre les jeux (s)</label>
+
+        <input type="number" step="1" min="0" max="600" name="pauseGame" id="pauseGame" value="60">
+
+    </div>
+
+</details>
 
 <button onclick="clickBtn()" class="go">
 
