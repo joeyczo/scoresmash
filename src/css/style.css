@@ -263,3 +263,169 @@ button.go:disabled
     align-items: center;
     justify-content: center;
 }
+
+/* TOURNOI */
+button.go.go-secondary
+{
+    margin: 15px 0;
+    font-size: 18px;
+    padding: 12px 20px;
+    border-width: 4px;
+}
+.t-title
+{
+    color: white;
+    font-size: 32px;
+    font-weight: 800;
+    margin: 25px 0 5px 0;
+    width: 80vw;
+}
+.player-row
+{
+    flex-direction: row;
+    align-items: center;
+    margin: 8px 0;
+}
+.player-row .tournoi-player
+{
+    margin: 0;
+}
+.player-row .rm-player
+{
+    background: #053C2C;
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 18px;
+    padding: 0 14px;
+    margin-left: 8px;
+    cursor: pointer;
+    align-self: stretch;
+}
+.tournoi-next
+{
+    color: white;
+    font-size: 22px;
+    font-weight: 800;
+    text-align: center;
+    margin: 20px 0;
+    width: 80vw;
+    min-height: 26px;
+}
+.t-champion
+{
+    color: white;
+    background: #06805C;
+    font-size: 26px;
+    font-weight: 800;
+    text-align: center;
+    padding: 18px;
+    border-radius: 10px;
+    width: 80vw;
+    margin: 10px 0;
+}
+.t-section
+{
+    width: 80vw;
+    margin: 15px 0;
+}
+.t-section h2
+{
+    color: white;
+    font-size: 24px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+.t-match
+{
+    background: #053C2C;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 6px 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+.t-match.current
+{
+    border: 2px solid #06805C;
+}
+.t-match .vs
+{
+    color: #588D7E;
+    margin: 0 6px;
+}
+.t-match .vs.now
+{
+    color: #06805C;
+    font-weight: 800;
+}
+.t-match .win
+{
+    color: white;
+    font-weight: 800;
+}
+.t-match .lose
+{
+    color: #588D7E;
+}
+.t-rank
+{
+    display: flex;
+    align-items: center;
+    color: white;
+    background: #053C2C;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 4px 0;
+    font-size: 16px;
+}
+.t-rank .pos
+{
+    background: #468B6A;
+    border-radius: 50%;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    margin-right: 10px;
+}
+.t-rank .wl
+{
+    margin-left: auto;
+    color: #588D7E;
+    font-weight: 600;
+}
+.t-bracket
+{
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+}
+.t-round
+{
+    min-width: 45vw;
+}
+.t-round h3
+{
+    color: #468B6A;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.tournoi-actions
+{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.tournoi-actions .go
+{
+    margin: 15px 0 0 0;
+}
+.tournoi-actions .go.go-secondary
+{
+    margin: 12px 0 30px 0;
+}

@@ -14,9 +14,12 @@ import favicon from 'serve-favicon';
 // @ts-ignore
 import http from "http";
 
+// Charge les variables du fichier .env s'il existe (sinon valeurs par défaut)
+try { process.loadEnvFile(); } catch (e) { /* Pas de fichier .env : on ignore */ }
+
 const app = express();
 const server = http.createServer(app);
-const port = 3000;
+const port = Number(process.env.PORT) || 3000;
 
 // Convertir l'URL du fichier actuel en chemin
 // @ts-ignore
@@ -48,8 +51,16 @@ app.get('/badminton', (req, res) => {
     res.sendFile(path.join(__dirname, 'src/view/badminton.html'));
 })
 
+app.get('/tournoi', (req, res) => {
+    res.sendFile(path.join(__dirname, 'src/view/tournoi.html'));
+})
+
 app.get('/pdfBad', (req, res) => {
     res.sendFile(path.join(__dirname, 'src/pdf/pdfBad.html'));
+})
+
+app.get('/pdfTournoi', (req, res) => {
+    res.sendFile(path.join(__dirname, 'src/pdf/pdfTournoi.html'));
 })
 
 server.listen(port, () => {

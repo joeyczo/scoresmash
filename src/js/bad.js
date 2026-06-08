@@ -17,6 +17,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 /********* INTERFACES *********/
 // @ts-ignore
 var dev = false; // TODO : Changer
+/** Match joué dans le cadre d'un tournoi (enchaînement automatique) */
+var tournamentMode = false;
+/** Un match est en cours (sert à n'avertir que pendant une partie) */
+let matchInProgress = false;
+/** Coupe l'avertissement de quitter le temps d'une navigation automatique */
+let suppressUnload = false;
 /********* METHODES *********/
 /**
  * Début du jeu lors du click sur le bouton
@@ -59,6 +65,18 @@ var clickBtn = () => {
 /** JEU */
 let game;
 let startGame = () => {
+    // Mode tournoi : on joue le match assigné et on démarre automatiquement
+    if (sessionStorage.getItem("tournament") === "1") {
+        let dataGame = sessionStorage.getItem("dataGame");
+        if (dataGame === null) {
+            window.location.href = '/tournoi';
+            return;
+        }
+        tournamentMode = true;
+        game = new Badminton(JSON.parse(dataGame));
+        startMatch();
+        return;
+    }
     // Reprise d'un match interrompu (rechargement, onglet vidé par le mobile, ...)
     let saved = localStorage.getItem("savedGame");
     if (saved !== null) {
@@ -131,6 +149,7 @@ document.addEventListener('visibilitychange', () => {
         requestWakeLock();
 });
 let startMatch = () => {
+    matchInProgress = true;
     game.start();
     $("button.go").hide();
     requestWakeLock();
@@ -419,6 +438,11 @@ class Badminton {
                     localStorage.removeItem("savedGame");
                     releaseWakeLock();
                     this.updateUndoButtons();
+                    matchInProgress = false;
+                    if (tournamentMode) {
+                        tournoiReportAndReturn(win, this.player1.getScore(), this.player2.getScore());
+                        return;
+                    }
                     this.printPDFMatch();
                     return;
                 }
@@ -1009,8 +1033,413 @@ class BadmintonPlayer {
         this.serve = s.serve;
     }
 }
+/**
+ * Énoncer un texte (version autonome, utilisée par le tableau de tournoi)
+ * @param {string} text
+ */
+let speak = (text) => {
+    if (dev)
+        return;
+    if ('speechSynthesis' in window) {
+        let msg = new SpeechSynthesisUtterance();
+        msg.text = text;
+        msg.lang = 'fr-FR';
+        msg.rate = 1.4;
+        window.speechSynthesis.speak(msg);
+    }
+};
+/** Libellé d'un tour de phase finale selon le nombre de joueurs */
+let tournoiPhaseLabel = (size) => {
+    switch (size) {
+        case 2: return "Finale";
+        case 4: return "Demi-finale";
+        case 8: return "Quart de finale";
+        case 16: return "Huitième de finale";
+        case 32: return "Seizième de finale";
+        default: return "Tour à " + size;
+    }
+};
+/** Charger l'état du tournoi en cours */
+let tournoiLoad = () => {
+    let raw = localStorage.getItem("savedTournament");
+    return raw === null ? null : JSON.parse(raw);
+};
+/** Sauvegarder l'état du tournoi */
+let tournoiSave = (st) => {
+    localStorage.setItem("savedTournament", JSON.stringify(st));
+};
+/** Mélanger un tableau (Fisher-Yates) */
+let tournoiShuffle = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+};
+/** Tailles de phase finale possibles (puissances de 2 ≤ nombre de joueurs) */
+let tournoiFinalSizes = (nbPlayers) => {
+    let sizes = [];
+    for (let s = 2; s <= nbPlayers; s *= 2)
+        sizes.push(s);
+    return sizes;
+};
+/** Générer les matchs de poule (paires aléatoires, sans répéter la paire précédente) */
+let tournoiBuildPoule = (nbPlayers, count) => {
+    let matches = [];
+    let prev = "";
+    for (let k = 0; k < count; k++) {
+        let a = 0, b = 0, key = "", tries = 0;
+        do {
+            a = Math.floor(Math.random() * nbPlayers);
+            b = Math.floor(Math.random() * nbPlayers);
+            key = Math.min(a, b) + "-" + Math.max(a, b);
+            tries++;
+        } while ((a === b || key === prev) && tries < 50);
+        prev = key;
+        matches.push({ p1: a, p2: b, winner: null, phase: "Poule", s1: 0, s2: 0 });
+    }
+    return matches;
+};
+/** Construire un tour de phase finale (tête de série n°1 contre dernier qualifié) */
+let tournoiBuildFinalRound = (st) => {
+    let rp = st.roundPlayers;
+    let size = rp.length;
+    let label = tournoiPhaseLabel(size);
+    for (let i = 0; i < size / 2; i++) {
+        st.matches.push({ p1: rp[i], p2: rp[size - 1 - i], winner: null, phase: label, s1: 0, s2: 0 });
+    }
+};
+/** Démarrer la phase finale à partir des qualifiés (déjà classés en têtes de série) */
+let tournoiStartFinal = (st) => {
+    st.roundPlayers = st.qualified.slice();
+    st.stage = "final";
+    tournoiBuildFinalRound(st);
+};
+/** À la fin de la poule : déterminer les qualifiés (et un éventuel barrage) */
+let tournoiBuildAfterPoule = (st) => {
+    let order = st.players.map((_, i) => i).sort((a, b) => st.players[b].wins - st.players[a].wins);
+    let N = st.finalSize;
+    let cutoff = st.players[order[N - 1]].wins;
+    let auto = order.filter(i => st.players[i].wins > cutoff);
+    let tied = order.filter(i => st.players[i].wins === cutoff);
+    let spots = N - auto.length;
+    st.qualified = auto.slice();
+    if (spots >= tied.length) {
+        // Tous les ex æquo passent : pas de barrage
+        st.qualified = st.qualified.concat(tied.slice(0, spots));
+        tournoiStartFinal(st);
+    }
+    else {
+        // Barrage : mini round-robin entre les ex æquo pour les places restantes
+        st.barrageGroup = tournoiShuffle(tied.slice());
+        st.barrageSpots = spots;
+        for (let a = 0; a < st.barrageGroup.length; a++) {
+            for (let b = a + 1; b < st.barrageGroup.length; b++) {
+                st.matches.push({ p1: st.barrageGroup[a], p2: st.barrageGroup[b], winner: null, phase: "Barrage", s1: 0, s2: 0 });
+            }
+        }
+        st.stage = "barrage";
+    }
+};
+/** À la fin du barrage : classer les ex æquo et compléter les qualifiés */
+let tournoiResolveBarrage = (st) => {
+    let bwins = {};
+    st.barrageGroup.forEach(i => bwins[i] = 0);
+    st.matches.filter(m => m.phase === "Barrage" && m.winner !== null).forEach(m => {
+        if (bwins[m.winner] !== undefined)
+            bwins[m.winner]++;
+    });
+    let ranked = st.barrageGroup.slice().sort((a, b) => bwins[b] - bwins[a]);
+    st.qualified = st.qualified.concat(ranked.slice(0, st.barrageSpots));
+    tournoiStartFinal(st);
+};
+/** Construire le tour suivant de la phase finale, ou désigner le champion */
+let tournoiBuildNextFinalRound = (st) => {
+    let n = st.roundPlayers.length / 2;
+    let lastRound = st.matches.slice(st.matches.length - n);
+    let winners = lastRound.map(m => m.winner);
+    if (winners.length === 1) {
+        st.champion = st.players[winners[0]].name;
+        st.stage = "done";
+        return false;
+    }
+    st.roundPlayers = winners;
+    tournoiBuildFinalRound(st);
+    return true;
+};
+/** Renvoyer le prochain match à jouer (en générant les phases au besoin) */
+let tournoiEnsureNext = (st) => {
+    while (true) {
+        if (st.cursor < st.matches.length && st.matches[st.cursor].winner === null) {
+            return st.matches[st.cursor];
+        }
+        if (st.stage === "poule")
+            tournoiBuildAfterPoule(st);
+        else if (st.stage === "barrage")
+            tournoiResolveBarrage(st);
+        else if (st.stage === "final") {
+            if (!tournoiBuildNextFinalRound(st))
+                return null;
+        }
+        else
+            return null;
+    }
+};
+/** Enregistrer le vainqueur du match courant et revenir au tableau */
+let tournoiReportAndReturn = (winSide, gamesP1, gamesP2) => {
+    let st = tournoiLoad();
+    if (st === null) {
+        window.location.href = '/tournoi';
+        return;
+    }
+    let m = st.matches[st.cursor];
+    let wi = winSide === 1 ? m.p1 : m.p2;
+    let li = winSide === 1 ? m.p2 : m.p1;
+    m.winner = wi;
+    m.s1 = gamesP1;
+    m.s2 = gamesP2;
+    st.players[wi].wins++;
+    st.players[li].losses++;
+    st.cursor++;
+    tournoiSave(st);
+    sessionStorage.setItem("tournoiAuto", "1");
+    sessionStorage.removeItem("tournament");
+    sessionStorage.removeItem("dataGame");
+    localStorage.removeItem("savedGame");
+    suppressUnload = true;
+    window.location.href = '/tournoi';
+};
+/** Envoyer un match vers l'écran de jeu classique */
+let tournoiGoToMatch = (st, m) => {
+    let info = Object.assign({}, st.gameInfos, {
+        player1: st.players[m.p1].name,
+        player2: st.players[m.p2].name,
+        start: new Date()
+    });
+    sessionStorage.setItem("dataGame", JSON.stringify(info));
+    sessionStorage.setItem("tournament", "1");
+    localStorage.removeItem("savedGame");
+    suppressUnload = true;
+    window.location.href = '/badminton';
+};
+/** Afficher la configuration / masquer le tableau */
+let tournoiShowConfig = () => {
+    $("#tournoi-config").show();
+    $("#tournoi-board").hide();
+    tournoiUpdateFinalOptions();
+};
+/** Afficher le tableau / masquer la configuration */
+let tournoiShowBoard = () => {
+    $("#tournoi-config").hide();
+    $("#tournoi-board").show();
+};
+/** Une ligne de match dans le tableau */
+let tournoiMatchLine = (st, m, current) => {
+    let n1 = st.players[m.p1].name;
+    let n2 = st.players[m.p2].name;
+    let res;
+    if (m.winner === null)
+        res = current ? " <span class=\"vs now\">en cours</span> " : " <span class=\"vs\">vs</span> ";
+    else if (typeof m.s1 === "number" && typeof m.s2 === "number")
+        res = " <span class=\"vs\">" + m.s1 + " - " + m.s2 + "</span> ";
+    else
+        res = " <span class=\"vs\">→</span> ";
+    let c1 = m.winner === m.p1 ? "win" : (m.winner === m.p2 ? "lose" : "");
+    let c2 = m.winner === m.p2 ? "win" : (m.winner === m.p1 ? "lose" : "");
+    return `<div class="t-match${current ? " current" : ""}">`
+        + `<span class="${c1}">${n1}</span>${res}<span class="${c2}">${n2}</span></div>`;
+};
+/** Construire le HTML du tableau de tournoi */
+let tournoiRenderBoard = (st) => {
+    let html = "";
+    if (st.champion !== null) {
+        html += `<div class="t-champion">🏆 Champion : ${st.champion}</div>`;
+    }
+    // Poule
+    let poule = st.matches.filter(m => m.phase === "Poule");
+    if (poule.length > 0) {
+        html += `<div class="t-section"><h2>Poule</h2>`;
+        st.matches.forEach((m, i) => {
+            if (m.phase === "Poule")
+                html += tournoiMatchLine(st, m, i === st.cursor && st.stage === "poule");
+        });
+        html += `</div>`;
+    }
+    // Classement
+    let order = st.players.map((_, i) => i).sort((a, b) => st.players[b].wins - st.players[a].wins);
+    html += `<div class="t-section"><h2>Classement</h2>`;
+    order.forEach((i, rank) => {
+        html += `<div class="t-rank"><span class="pos">${rank + 1}</span> ${st.players[i].name}`
+            + ` <span class="wl">${st.players[i].wins} V / ${st.players[i].losses} D</span></div>`;
+    });
+    html += `</div>`;
+    // Barrage
+    let barrage = st.matches.filter(m => m.phase === "Barrage");
+    if (barrage.length > 0) {
+        html += `<div class="t-section"><h2>Barrage</h2>`;
+        st.matches.forEach((m, i) => {
+            if (m.phase === "Barrage")
+                html += tournoiMatchLine(st, m, i === st.cursor && st.stage === "barrage");
+        });
+        html += `</div>`;
+    }
+    // Phase finale : une colonne par tour, dans l'ordre d'apparition
+    let phases = [];
+    st.matches.forEach(m => {
+        if (m.phase !== "Poule" && m.phase !== "Barrage" && phases.indexOf(m.phase) === -1)
+            phases.push(m.phase);
+    });
+    if (phases.length > 0) {
+        html += `<div class="t-section"><h2>Phase finale</h2><div class="t-bracket">`;
+        phases.forEach(ph => {
+            html += `<div class="t-round"><h3>${ph}</h3>`;
+            st.matches.forEach((m, i) => {
+                if (m.phase === ph)
+                    html += tournoiMatchLine(st, m, i === st.cursor && st.stage === "final");
+            });
+            html += `</div>`;
+        });
+        html += `</div></div>`;
+    }
+    $("#tournoi-board-content").html(html);
+    // Boutons selon l'état (le PDF n'apparaît qu'une fois le tournoi terminé)
+    if (st.stage === "done") {
+        $("#tournoi-go").hide();
+        $("#tournoi-pdf").show();
+    }
+    else {
+        $("#tournoi-go").show().text(st.started ? "REPRENDRE" : "DÉMARRER LE TOURNOI");
+        $("#tournoi-pdf").hide();
+    }
+};
+/** Ouvrir le PDF récapitulatif du tournoi */
+let downloadTournoiPDF = () => {
+    window.open('/pdfTournoi', '_blank');
+};
+/** Avancer au prochain match : annonce, courte pause d'affichage, puis lancement */
+let tournoiAdvanceAndGo = (st) => {
+    if (!st.started)
+        st.started = true;
+    let next = tournoiEnsureNext(st);
+    tournoiSave(st);
+    tournoiRenderBoard(st);
+    if (next === null) {
+        speak("Le tournoi est terminé. Champion : " + st.champion);
+        return;
+    }
+    let a = st.players[next.p1].name;
+    let b = st.players[next.p2].name;
+    $("#tournoi-next").text(next.phase + " — " + a + " contre " + b);
+    speak(next.phase + ". Prochain match : " + a + " contre " + b);
+    setTimeout(() => tournoiGoToMatch(st, next), 4000);
+};
+/** Bouton Démarrer / Reprendre */
+let tournoiStartOrResume = () => {
+    let st = tournoiLoad();
+    if (st !== null)
+        tournoiAdvanceAndGo(st);
+};
+/** Bouton Nouveau tournoi */
+let tournoiNew = () => {
+    if (!confirm("Démarrer un nouveau tournoi ? Le tournoi en cours sera perdu."))
+        return;
+    localStorage.removeItem("savedTournament");
+    sessionStorage.removeItem("tournoiAuto");
+    window.location.href = '/tournoi';
+};
+/** Ajouter un champ joueur */
+let tournoiAddPlayer = () => {
+    let n = $(".tournoi-player").length + 1;
+    $("#players-list").append(`<div class="row-infos player-row">`
+        + `<input type="text" class="tournoi-player" placeholder="Joueur ${n}">`
+        + `<button type="button" class="rm-player" onclick="tournoiRemovePlayer(this)">🗑️</button>`
+        + `</div>`);
+    tournoiUpdateFinalOptions();
+};
+/** Supprimer un champ joueur (en gardant au moins 2 champs) */
+let tournoiRemovePlayer = (btn) => {
+    if ($(".tournoi-player").length <= 2)
+        return;
+    $(btn).closest(".player-row").remove();
+    tournoiUpdateFinalOptions();
+};
+/** Mettre à jour les tailles de phase finale proposées selon le nombre de joueurs */
+let tournoiUpdateFinalOptions = () => {
+    let nb = $(".tournoi-player").length;
+    let sizes = tournoiFinalSizes(nb);
+    let prev = $("#finalPhase").val();
+    let opts = sizes.map(s => `<option value="${s}">${tournoiPhaseLabel(s)}</option>`).join("");
+    $("#finalPhase").html(opts);
+    if (prev !== null && sizes.indexOf(Number(prev)) !== -1)
+        $("#finalPhase").val(prev);
+};
+/** Créer le tournoi à partir du formulaire */
+let tournoiCreate = () => {
+    let names = [];
+    $(".tournoi-player").each((i, el) => {
+        let v = $(el).val().trim();
+        names.push(v.length > 0 ? v : "Joueur " + (i + 1));
+    });
+    if (names.length < 2) {
+        alert("Ajoutez au moins 2 joueurs.");
+        return;
+    }
+    let poolCount = Number($("#nbMatchsPoule").val());
+    if (!(poolCount >= 1))
+        poolCount = 1;
+    let finalSize = Number($("#finalPhase").val());
+    let gameInfos = {
+        player1: "",
+        player2: "",
+        sets: (Number($("#nbSets").val()) > 0 ? Number($("#nbSets").val()) : 2),
+        set: (Number($("#nbJSets").val()) > 0 ? Number($("#nbJSets").val()) : 6),
+        points: (Number($("#nbPoints").val()) > 0 ? Number($("#nbPoints").val()) : 20),
+        training: $("#training").is(":checked"),
+        timeTrain: (Number($("#timeTrain").val()) >= 0 ? Number($("#timeTrain").val()) : 40),
+        pauseStart: (Number($("#pauseStart").val()) >= 0 ? Number($("#pauseStart").val()) : 30),
+        pauseSet: (Number($("#pauseSet").val()) >= 0 ? Number($("#pauseSet").val()) : 45),
+        pauseGame: (Number($("#pauseGame").val()) >= 0 ? Number($("#pauseGame").val()) : 60),
+        start: new Date()
+    };
+    let players = names.map(n => ({ name: n, wins: 0, losses: 0 }));
+    let st = {
+        gameInfos: gameInfos,
+        players: players,
+        poolCount: poolCount,
+        finalSize: finalSize,
+        matches: tournoiBuildPoule(players.length, poolCount),
+        cursor: 0,
+        stage: "poule",
+        started: false,
+        roundPlayers: [],
+        barrageGroup: [],
+        barrageSpots: 0,
+        qualified: [],
+        champion: null
+    };
+    tournoiSave(st);
+    tournoiRenderBoard(st);
+    tournoiShowBoard();
+};
+/** Point d'entrée de la page /tournoi */
+let tournoiInit = () => {
+    let st = tournoiLoad();
+    if (st === null) {
+        tournoiShowConfig();
+        return;
+    }
+    tournoiRenderBoard(st);
+    tournoiShowBoard();
+    // Retour automatique après un match : on enchaîne
+    if (sessionStorage.getItem("tournoiAuto") === "1") {
+        sessionStorage.removeItem("tournoiAuto");
+        tournoiAdvanceAndGo(st);
+    }
+};
 /********* EVENTS *********/
 window.addEventListener('beforeunload', (event) => {
+    if (suppressUnload || !matchInProgress)
+        return;
     const confirmationMessage = 'Êtes-vous sûr de vouloir quitter ou recharger la page ?';
     event.returnValue = confirmationMessage;
     return confirmationMessage;

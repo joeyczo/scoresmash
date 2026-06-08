@@ -1,0 +1,126 @@
+<!--
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+-->
+
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Score Smash | Tournoi</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="../js/bad.js"></script>
+</head>
+<body>
+
+<div id="tournoi-config">
+
+    <h1 class="t-title">Mode tournoi</h1>
+
+    <div id="players-list">
+
+        <div class="row-infos player-row">
+            <input type="text" class="tournoi-player" placeholder="Joueur 1">
+            <button type="button" class="rm-player" onclick="tournoiRemovePlayer(this)">🗑️</button>
+        </div>
+
+        <div class="row-infos player-row">
+            <input type="text" class="tournoi-player" placeholder="Joueur 2">
+            <button type="button" class="rm-player" onclick="tournoiRemovePlayer(this)">🗑️</button>
+        </div>
+
+    </div>
+
+    <button type="button" class="go go-secondary" onclick="tournoiAddPlayer()">➕ AJOUTER UN JOUEUR</button>
+
+    <div class="row-infos">
+        <label for="nbMatchsPoule"># de matchs de poule</label>
+        <input type="number" step="1" min="1" max="200" name="nbMatchsPoule" id="nbMatchsPoule" value="6">
+    </div>
+
+    <div class="row-infos">
+        <label for="finalPhase">Phase finale</label>
+        <select name="finalPhase" id="finalPhase"></select>
+    </div>
+
+    <div class="row-infos">
+        <label for="nbSets"># de jeux gagnants :</label>
+        <input type="number" step="1" min="1" max="10" name="nbSets" id="nbSets" value="2">
+    </div>
+
+    <div class="row-infos">
+        <label for="nbPoints"># de points par set</label>
+        <input type="number" step="1" min="1" max="50" name="nbPoints" id="nbPoints" value="20">
+    </div>
+
+    <div class="row-infos">
+        <label for="nbJSets"># de sets par jeu</label>
+        <input type="number" step="1" min="1" max="50" name="nbJSets" id="nbJSets" value="6">
+    </div>
+
+    <details class="more-params">
+
+        <summary>Plus de paramètres</summary>
+
+        <div class="row-infos check-infos">
+            <label for="training">Échauffement</label>
+            <input type="checkbox" name="training" id="training" checked>
+        </div>
+
+        <div class="row-infos">
+            <label for="timeTrain">Temps d'échauffement (s)</label>
+            <input type="number" step="1" min="0" max="600" name="timeTrain" id="timeTrain" value="40">
+        </div>
+
+        <div class="row-infos">
+            <label for="pauseStart">Pause début de match (s)</label>
+            <input type="number" step="1" min="0" max="600" name="pauseStart" id="pauseStart" value="30">
+        </div>
+
+        <div class="row-infos">
+            <label for="pauseSet">Pause entre les sets (s)</label>
+            <input type="number" step="1" min="0" max="600" name="pauseSet" id="pauseSet" value="45">
+        </div>
+
+        <div class="row-infos">
+            <label for="pauseGame">Pause entre les jeux (s)</label>
+            <input type="number" step="1" min="0" max="600" name="pauseGame" id="pauseGame" value="60">
+        </div>
+
+    </details>
+
+    <button type="button" onclick="tournoiCreate()" class="go">CRÉER LE TOURNOI</button>
+
+</div>
+
+<div id="tournoi-board" style="display: none">
+
+    <div id="tournoi-next" class="tournoi-next"></div>
+
+    <div id="tournoi-board-content"></div>
+
+    <div class="tournoi-actions">
+        <button id="tournoi-go" class="go" onclick="tournoiStartOrResume()">DÉMARRER LE TOURNOI</button>
+        <button id="tournoi-pdf" type="button" class="go" style="display: none" onclick="downloadTournoiPDF()">TÉLÉCHARGER LE PDF</button>
+        <button type="button" class="go go-secondary" onclick="tournoiNew()">NOUVEAU TOURNOI</button>
+    </div>
+
+</div>
+
+<script>
+
+    $(() => {
+
+        tournoiInit();
+
+    })
+
+</script>
+
+</body>
+</html>

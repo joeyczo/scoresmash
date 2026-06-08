@@ -1,0 +1,270 @@
+<!--
+* Copyright (c) 2024. SCORE SMASH
+* ScoreSmash - Développé par Joey CAZO
+* License : Apache-2.0, Août 2024
+-->
+
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Score Smash | Tournoi</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://unpkg.com/jspdf@1.5.3/dist/jspdf.min.js"></script>
+    <script src="pdf/Inter-Regular-normal.js"></script>
+</head>
+<body>
+
+<h1>génération en cours ...</h1>
+
+</body>
+<script>
+
+    /********* OUTILS *********/
+
+    var trunc = (txt, n) => {
+        txt = String(txt);
+        return txt.length > n ? txt.slice(0, n - 1) + '.' : txt;
+    }
+
+    var setStatus = (msg) => {
+        let h = document.querySelector('h1');
+        if (h) h.textContent = msg;
+    }
+
+    var phaseLabel = (s) => ({
+        2: 'Finale', 4: 'Demi-finale', 8: 'Quart de finale',
+        16: 'Huitième de finale', 32: 'Seizième de finale'
+    }[s] || ('Tour à ' + s));
+
+    /********* DONNÉES *********/
+
+    try {
+
+    let st = JSON.parse(localStorage.getItem('savedTournament'));
+
+    // Garde-fou : pas de tournoi en mémoire
+    if (!st || !st.players || !st.matches || st.matches.length === 0)
+        throw new Error('__NODATA__');
+
+    let nameOf = (i) => st.players[i].name;
+
+    let order = st.players.map((_, i) => i).sort((a, b) => st.players[b].wins - st.players[a].wins);
+
+    let played  = st.matches.filter(m => m.winner !== null);
+    let poule   = st.matches.filter(m => m.phase === 'Poule');
+    let barrage = st.matches.filter(m => m.phase === 'Barrage');
+
+    // Tours de phase finale, dans l'ordre d'apparition
+    let finalPhases = [];
+    st.matches.forEach(m => {
+        if (m.phase !== 'Poule' && m.phase !== 'Barrage' && finalPhases.indexOf(m.phase) === -1) finalPhases.push(m.phase);
+    });
+
+    /********* RENDU *********/
+
+    let doc = new jsPDF({ unit: 'px' });
+    doc.setFont('inter', 'bold');
+
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+    const M = 14;
+
+    const C = {
+        bg:     [160, 228, 196],
+        mid:    [129, 194, 166],
+        card:   [79, 140, 117],
+        dark:   [5, 60, 44],
+        accent: [6, 128, 92],
+        white:  [255, 255, 255],
+        muted:  [105, 138, 128],
+        ink:    [0, 29, 20]
+    };
+
+    let setFill = (c) => doc.setFillColor(c[0], c[1], c[2]);
+    let setText = (c) => doc.setTextColor(c[0], c[1], c[2]);
+
+    let bg = () => { setFill(C.bg); doc.rect(0, 0, W, H, 'F'); }
+
+    let pageNo = 1;
+    let y = 0;
+
+    let footer = () => {
+        setText(C.ink);
+        doc.setFontSize(8);
+        doc.setFontType('medium');
+        doc.text('ScoreSmash - ' + new Date().toLocaleDateString('fr-FR'), M + 2, H - 16);
+        doc.text('Page ' + pageNo, W - M - 2, H - 16, { align: 'right' });
+    }
+
+    let newPage = () => {
+        doc.addPage();
+        bg();
+        pageNo++;
+        footer();
+        y = 42;
+    }
+
+    // Saute à une nouvelle page si le bloc à venir ne tient plus
+    let ensure = (h) => { if (y + h > H - 30) newPage(); }
+
+    // Titre de section
+    let section = (txt) => {
+        ensure(34);
+        setText(C.dark);
+        doc.setFontSize(16);
+        doc.setFontType('bold');
+        doc.text(txt, M + 2, y + 8);
+        y += 24;
+    }
+
+    // Ligne de match : nom — score — nom (vainqueur en clair, perdant grisé)
+    let matchRow = (m) => {
+        ensure(32);
+        let h = 26;
+        setFill(C.card);
+        doc.roundedRect(M, y, W - 2 * M, h, 6, 6, 'F');
+
+        let p1won = m.winner === m.p1;
+        let p2won = m.winner === m.p2;
+
+        setText(p1won ? C.white : C.muted);
+        doc.setFontSize(10);
+        doc.setFontType(p1won ? 'bold' : 'medium');
+        doc.text(trunc(nameOf(m.p1), 16), M + 12, y + 17);
+
+        setText(C.white);
+        doc.setFontSize(11);
+        doc.setFontType('bold');
+        let score = m.winner === null ? 'vs'
+                  : (typeof m.s1 === 'number' && typeof m.s2 === 'number' ? (m.s1 + ' - ' + m.s2) : '—');
+        doc.text(score, W / 2, y + 17, { align: 'center' });
+
+        setText(p2won ? C.white : C.muted);
+        doc.setFontSize(10);
+        doc.setFontType(p2won ? 'bold' : 'medium');
+        doc.text(trunc(nameOf(m.p2), 16), W - M - 12, y + 17, { align: 'right' });
+
+        y += h + 6;
+    }
+
+    /***** PAGE 1 : RÉSUMÉ *****/
+
+    bg();
+    footer();
+
+    setText(C.dark);
+    doc.setFontSize(30);
+    doc.setFontType('bold');
+    doc.text('Résumé du tournoi', M + 2, 42);
+
+    // Bandeau champion
+    setFill(C.dark);
+    doc.roundedRect(M, 58, W - 2 * M, 66, 10, 10, 'F');
+    setText(C.bg);
+    doc.setFontSize(10);
+    doc.setFontType('medium');
+    doc.text('CHAMPION', M + 16, 82);
+    setText(C.white);
+    doc.setFontSize(26);
+    doc.setFontType('bold');
+    doc.text(trunc(st.champion || 'Tournoi en cours', 18), M + 16, 110);
+    setText(C.accent);
+    doc.setFontSize(13);
+    doc.setFontType('bold');
+    doc.text('1re place', W - M - 16, 106, { align: 'right' });
+
+    // Cartes méta
+    let my = 138, mh = 56;
+    let mw = (W - 2 * M - 3 * 8) / 4;
+    let metaCard = (idx, label, value) => {
+        let x = M + idx * (mw + 8);
+        setFill(C.card);
+        doc.roundedRect(x, my, mw, mh, 8, 8, 'F');
+        setText(C.bg);
+        doc.setFontSize(7);
+        doc.setFontType('medium');
+        doc.text(String(label).toUpperCase(), x + 10, my + 18);
+        setText(C.white);
+        doc.setFontSize(14);
+        doc.setFontType('bold');
+        doc.text(trunc(value, 12), x + 10, my + 40);
+    }
+    metaCard(0, 'Joueurs', st.players.length);
+    metaCard(1, 'Matchs joués', played.length);
+    metaCard(2, 'Poule', poule.length + ' matchs');
+    metaCard(3, 'Phase finale', phaseLabel(st.finalSize));
+
+    // Classement (tableau des victoires)
+    y = my + mh + 22;
+    section('Classement');
+
+    order.forEach((i, rank) => {
+        ensure(28);
+        let h = 22;
+        setFill(rank === 0 ? C.accent : C.card);
+        doc.roundedRect(M, y, W - 2 * M, h, 6, 6, 'F');
+
+        setText(C.bg);
+        doc.setFontSize(10);
+        doc.setFontType('bold');
+        doc.text(String(rank + 1), M + 14, y + 15, { align: 'center' });
+
+        setText(C.white);
+        doc.text(trunc(nameOf(i), 22), M + 30, y + 15);
+
+        setText(C.bg);
+        doc.setFontSize(9);
+        doc.setFontType('medium');
+        doc.text(st.players[i].wins + ' V  /  ' + st.players[i].losses + ' D', W - M - 12, y + 15, { align: 'right' });
+
+        y += h + 5;
+    });
+
+    /***** PAGE 2+ : MATCHS *****/
+
+    newPage();
+    setText(C.dark);
+    doc.setFontSize(30);
+    doc.setFontType('bold');
+    doc.text('Les matchs', M + 2, 42);
+    y = 64;
+
+    if (poule.length > 0) {
+        section('Poule');
+        poule.forEach(matchRow);
+    }
+
+    if (barrage.length > 0) {
+        section('Barrage');
+        barrage.forEach(matchRow);
+    }
+
+    finalPhases.forEach(ph => {
+        section(ph);
+        st.matches.filter(m => m.phase === ph).forEach(matchRow);
+    });
+
+    /***** TÉLÉCHARGEMENT *****/
+
+    let now = new Date();
+    let stamp = now.toLocaleDateString('fr-FR').replaceAll('/', '-')
+              + ' ' + String(now.getHours()).padStart(2, '0') + 'h' + String(now.getMinutes()).padStart(2, '0');
+    doc.save('tournoi ' + stamp + '.pdf');
+
+    setStatus('PDF téléchargé. Vous pouvez fermer cet onglet.');
+
+    } catch (e) {
+        setStatus(e.message === '__NODATA__'
+            ? 'Aucun tournoi à imprimer.'
+            : 'Erreur lors de la génération : ' + e.message);
+        console.error(e);
+    }
+
+</script>
+
+</html>
