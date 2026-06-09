@@ -1216,6 +1216,12 @@ let tournoiGoToMatch = (st, m) => {
         player2: st.players[m.p2].name,
         start: new Date()
     });
+    // Les matchs de phase finale (hors poule / barrage) ont leurs propres réglages
+    if (m.phase !== "Poule" && m.phase !== "Barrage") {
+        info.sets = st.finalSets || info.sets;
+        info.set = st.finalSet || info.set;
+        info.points = st.finalPoints || info.points;
+    }
     sessionStorage.setItem("dataGame", JSON.stringify(info));
     sessionStorage.setItem("tournament", "1");
     localStorage.removeItem("savedGame");
@@ -1407,6 +1413,9 @@ let tournoiCreate = () => {
         players: players,
         poolCount: poolCount,
         finalSize: finalSize,
+        finalSets: (Number($("#finalNbSets").val()) > 0 ? Number($("#finalNbSets").val()) : gameInfos.sets),
+        finalSet: (Number($("#finalNbJSets").val()) > 0 ? Number($("#finalNbJSets").val()) : gameInfos.set),
+        finalPoints: (Number($("#finalNbPoints").val()) > 0 ? Number($("#finalNbPoints").val()) : gameInfos.points),
         matches: tournoiBuildPoule(players.length, poolCount),
         cursor: 0,
         stage: "poule",

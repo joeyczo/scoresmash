@@ -1545,10 +1545,13 @@ interface tournoiMatch {
 
 /** État complet d'un tournoi (persisté dans le localStorage) */
 interface tournoiState {
-    gameInfos    : dataSendInfoStart, // Paramètres classiques (noms de joueurs ignorés)
+    gameInfos    : dataSendInfoStart, // Paramètres de jeu de la poule / du barrage
     players      : tournoiPlayer[],
     poolCount    : number,            // Nombre de matchs de poule
     finalSize    : number,            // Taille de la phase finale (puissance de 2)
+    finalSets    : number,            // Phase finale : jeux pour gagner le match
+    finalSet     : number,            // Phase finale : sets pour gagner le jeu
+    finalPoints  : number,            // Phase finale : points pour gagner le set
     matches      : tournoiMatch[],    // Tous les matchs, dans l'ordre de jeu
     cursor       : number,            // Index du match en cours / à jouer
     stage        : string,            // "poule" | "barrage" | "final" | "done"
@@ -1792,6 +1795,13 @@ let tournoiGoToMatch = ( st : tournoiState, m : tournoiMatch ) : void => {
         start   : new Date()
     });
 
+    // Les matchs de phase finale (hors poule / barrage) ont leurs propres réglages
+    if (m.phase !== "Poule" && m.phase !== "Barrage") {
+        info.sets   = st.finalSets   || info.sets;
+        info.set    = st.finalSet    || info.set;
+        info.points = st.finalPoints || info.points;
+    }
+
     sessionStorage.setItem("dataGame", JSON.stringify(info));
     sessionStorage.setItem("tournament", "1");
     localStorage.removeItem("savedGame");
@@ -2014,6 +2024,9 @@ let tournoiCreate = () : void => {
         players      : players,
         poolCount    : poolCount,
         finalSize    : finalSize,
+        finalSets    : (Number($("#finalNbSets").val())   > 0 ? Number($("#finalNbSets").val())   : gameInfos.sets),
+        finalSet     : (Number($("#finalNbJSets").val())  > 0 ? Number($("#finalNbJSets").val())  : gameInfos.set),
+        finalPoints  : (Number($("#finalNbPoints").val()) > 0 ? Number($("#finalNbPoints").val()) : gameInfos.points),
         matches      : tournoiBuildPoule(players.length, poolCount),
         cursor       : 0,
         stage        : "poule",
